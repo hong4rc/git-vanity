@@ -13,6 +13,8 @@ cafeb0b feat: add login
 
 The commit message, author, and date stay identical. Only an invisible `x-nonce` header is added.
 
+> **Proof it works:** This repo's own commit starts with `000000` — check `git log --oneline` to see it.
+
 ## Install
 
 ```bash
@@ -78,6 +80,19 @@ coffee   c0ffee    ~ 5s       decade   decade    ~ 5s
 facade   facade    ~ 5s       defaced  defaced   ~ 30s+
 ```
 
+### Dry Run
+
+Use `-n` to preview the match before writing. In an interactive terminal, it will ask to apply:
+
+```bash
+$ git vanity 000000 -n
+✓ Found matching hash: 00000075b362... (143,602,767 attempts, 7.96s)
+Apply? [Y/n] y
+✓ 0000073d64ed → 00000075b362... (applied)
+```
+
+This avoids searching twice — preview and apply in one step.
+
 ### Options
 
 | Option | Short | Default | Description |
@@ -85,10 +100,10 @@ facade   facade    ~ 5s       defaced  defaced   ~ 30s+
 | `--match <pos>` | `-m` | `start` | Where to match: `start`, `contains`, or `end` |
 | `--preset <name>` | `-p` | | Use a preset hex word |
 | `--list-presets` | | | List all available presets |
+| `--dry-run` | `-n` | | Preview match, then ask to apply |
 | `--message <msg>` | | HEAD's message | Override commit message |
 | `--timeout <ms>` | `-t` | `30000` | Abort after N milliseconds |
 | `--max-attempts <n>` | | unlimited | Abort after N hash attempts |
-| `--dry-run` | `-n` | | Print matching hash without writing |
 | `--debug` | `-d` | | Show throughput metrics |
 | `--no-repeat` | | | Disable structured pattern detection |
 | `--threads <n>` | `-j` | num cpus | Number of worker threads |

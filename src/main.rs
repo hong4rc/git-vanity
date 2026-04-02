@@ -185,9 +185,24 @@ fn run() -> Result<(), AppError> {
         elapsed.as_secs_f64()
     );
 
-    // Output: dry-run or write
+    // Dry-run: show result without writing
     if cli.dry_run {
         println!("\u{2713} Found matching hash: {} ({})", hash_preview, stats);
+
+        // If interactive TTY, offer to apply
+        if atty::is(atty::Stream::Stdin) {
+            eprint!("Apply? [Y/n] ");
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).ok();
+            let answer = input.trim().to_ascii_lowercase();
+            if answer.is_empty() || answer == "y" || answer == "yes" {
+                let new_hash = git::write_commit_object(&result.content)
+                    .and_then(|hash| git::update_head(&hash).map(|()| hash))
+                    .map_err(AppError::Git)?;
+                let new_preview = format_hash(&new_hash, &pattern_str, position);
+                println!("\u{2713} {} \u{2192} {} (applied)", &old_hash[..12], new_preview);
+            }
+        }
         return Ok(());
     }
 
