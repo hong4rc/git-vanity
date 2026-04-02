@@ -1,0 +1,32 @@
+[package]
+name = "git-vanity"
+version = "0.1.0"
+edition = "2021"
+description = "Generate Git commit hashes matching custom patterns (vanity hashes)"
+license = "LicenseRef-source-available"
+authors = ["hong4rc"]
+repository = "https://github.com/hong4rc/git-vanity"
+keywords = ["git", "vanity", "hash", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "git-vanity"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+sha1 = "0.10"
+num_cpus = "1.16"
+rand = "0.8"
+hex = "0.4"
+regex = "1"
+atty = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
