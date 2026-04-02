@@ -151,6 +151,18 @@ src/
   git.rs       — Git plumbing operations
 ```
 
+## Auto-Vanity Hook
+
+This repo includes a `post-commit` hook that automatically rewrites every commit to start with `000000`. It activates on first `cargo build` via `build.rs`.
+
+To set it up manually:
+
+```bash
+git config core.hooksPath hooks
+```
+
+Every commit in this repo proves the tool works — check `git log --oneline`.
+
 ## Author
 
 **hong4rc** — [github.com/hong4rc](https://github.com/hong4rc)

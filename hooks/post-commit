@@ -1,0 +1,3 @@
+#!/bin/sh
+# Auto-vanity: rewrite every commit to start with 000000
+exec git vanity 000000
