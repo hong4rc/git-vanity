@@ -94,3 +94,20 @@ pub fn update_head(hash: &str) -> Result<(), String> {
 pub fn get_head_hash() -> Result<String, String> {
     run_git_string(&["rev-parse", "HEAD"])
 }
+
+/// Get commit log: returns Vec of (hash, has_nonce, subject).
+pub fn log_with_nonce_info(max: usize) -> Result<Vec<(String, bool, String)>, String> {
+    let hashes_output = run_git_string(&["log", "--format=%H", &format!("-{}", max)])?;
+    let subjects_output = run_git_string(&["log", "--format=%s", &format!("-{}", max)])?;
+
+    hashes_output
+        .lines()
+        .zip(subjects_output.lines())
+        .map(|(hash, subject)| {
+            let raw = run_git(&["cat-file", "commit", hash])
+                .map(|out| String::from_utf8_lossy(&out).into_owned())?;
+            let has_nonce = raw.lines().any(|l| l.starts_with("x-nonce "));
+            Ok((hash.to_string(), has_nonce, subject.to_string()))
+        })
+        .collect()
+}

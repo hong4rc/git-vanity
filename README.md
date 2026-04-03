@@ -105,6 +105,19 @@ Prefix:  000000 (6 identical chars)
 Message: ux: bell notification on long searches (> 2s)
 ```
 
+### Vanity Log
+
+See which commits in your repo have vanity hashes:
+
+```bash
+$ git vanity log
+✓ 000000d chore: remove unused deps (rand, atty), use std::io::IsTerminal
+✓ 0000005 ux: add 'git vanity show' to inspect HEAD vanity status
+✓ 000000e ux: bell notification on long searches (> 2s)
+  ...
+17/17 commits have vanity hashes
+```
+
 ### Options
 
 | Option | Short | Default | Description |

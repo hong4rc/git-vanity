@@ -118,9 +118,11 @@ fn run() -> Result<(), AppError> {
         return Ok(());
     }
 
-    // Show command: display HEAD's vanity info
-    if cli.pattern.as_deref() == Some("show") {
-        return show_vanity();
+    // Subcommands: show / log
+    match cli.pattern.as_deref() {
+        Some("show") => return show_vanity(),
+        Some("log") => return vanity_log(),
+        _ => {}
     }
 
     // Resolve pattern: --preset takes priority, then positional arg
@@ -414,6 +416,34 @@ fn show_vanity() -> Result<(), AppError> {
         .next()
         .unwrap_or("");
     println!("Message: {}", msg);
+
+    Ok(())
+}
+
+/// Show vanity stats for recent commits.
+fn vanity_log() -> Result<(), AppError> {
+    git::ensure_repo().map_err(AppError::Git)?;
+
+    let entries = git::log_with_nonce_info(50).map_err(AppError::Git)?;
+    let color = supports_color();
+    let vanity_count = entries.iter().filter(|(_, has, _)| *has).count();
+
+    entries.iter().for_each(|(hash, has_nonce, subject)| {
+        let short = &hash[..7];
+        let marker = if *has_nonce { "\u{2713}" } else { " " };
+        let colored_hash = if *has_nonce && color {
+            bold_green(short, true)
+        } else {
+            short.to_string()
+        };
+        println!("{} {} {}", marker, colored_hash, subject);
+    });
+
+    println!(
+        "\n{}/{} commits have vanity hashes",
+        vanity_count,
+        entries.len()
+    );
 
     Ok(())
 }

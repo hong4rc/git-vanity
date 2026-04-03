@@ -509,6 +509,25 @@ fn test_show_without_vanity() {
 }
 
 #[test]
+fn test_log_command() {
+    let dir = setup_temp_repo();
+    binary()
+        .args(["cafe"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let out = binary()
+        .args(["log"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("1/1 commits have vanity hashes"));
+}
+
+#[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();
     let out = binary()
