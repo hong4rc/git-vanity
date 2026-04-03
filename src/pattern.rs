@@ -200,21 +200,21 @@ impl Pattern {
             },
 
             Pattern::Repeat(n) => {
-                let mut run = 1usize;
-                let mut prev = nibble_at(hash, 0);
-                for i in 1..40 {
-                    let curr = nibble_at(hash, i);
-                    if curr == prev {
-                        run += 1;
-                        if run >= *n {
-                            return true;
-                        }
-                    } else {
-                        run = 1;
-                        prev = curr;
-                    }
-                }
-                false
+                (1..40)
+                    .map(|i| nibble_at(hash, i))
+                    .fold(
+                        (1usize, nibble_at(hash, 0), false),
+                        |(run, prev, found), curr| {
+                            if found {
+                                (run, prev, true)
+                            } else if curr == prev {
+                                (run + 1, curr, run + 1 >= *n)
+                            } else {
+                                (1, curr, false)
+                            }
+                        },
+                    )
+                    .2
             }
 
             Pattern::Structured {
