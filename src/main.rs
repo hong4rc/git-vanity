@@ -8,6 +8,7 @@ mod worker;
 
 use clap::Parser;
 use pattern::MatchPosition;
+use std::io::IsTerminal;
 use std::process;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -201,7 +202,7 @@ fn run() -> Result<(), AppError> {
     };
 
     // Spinner: show live progress on TTY unless --quiet
-    let show_progress = !cli.quiet && !cli.debug && atty::is(atty::Stream::Stderr);
+    let show_progress = !cli.quiet && !cli.debug && std::io::stderr().is_terminal();
     let spinner_counter = Arc::clone(&progress_counter);
     let spinner_handle = show_progress.then(|| {
         std::thread::spawn(move || {
@@ -262,7 +263,7 @@ fn run() -> Result<(), AppError> {
     }
 
     // Bell on long searches (> 2s) to notify user
-    if elapsed.as_secs_f64() > 2.0 && atty::is(atty::Stream::Stderr) {
+    if elapsed.as_secs_f64() > 2.0 && std::io::stderr().is_terminal() {
         eprint!("\x07"); // BEL character
     }
 
@@ -281,7 +282,7 @@ fn run() -> Result<(), AppError> {
     if cli.dry_run {
         println!("\u{2713} Found matching hash: {}{}", hash_preview, stats);
 
-        if atty::is(atty::Stream::Stdin) {
+        if std::io::stdin().is_terminal() {
             eprint!("Apply? [Y/n] ");
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).ok();
@@ -315,7 +316,7 @@ fn run() -> Result<(), AppError> {
 
 /// Detect color support: stdout is TTY + NO_COLOR env not set.
 fn supports_color() -> bool {
-    atty::is(atty::Stream::Stdout) && std::env::var_os("NO_COLOR").is_none()
+    std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none()
 }
 
 /// Wrap text in bold green ANSI codes if color is supported.
