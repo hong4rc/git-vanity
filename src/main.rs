@@ -229,9 +229,9 @@ fn run() -> Result<(), AppError> {
         position,
     };
 
-    // Progress bar with ETA on TTY unless --quiet or trivial pattern
+    // Progress bar only for patterns expected to take > 0.5s (~50M attempts at 100M/s)
     let show_progress =
-        !cli.quiet && !cli.debug && std::io::stderr().is_terminal() && est > 100_000; // skip bar for instant matches
+        !cli.quiet && !cli.debug && std::io::stderr().is_terminal() && est_secs >= 0.5;
     let spinner_counter = Arc::clone(&progress_counter);
     let est_attempts = est;
     let spinner_handle = show_progress.then(|| {
