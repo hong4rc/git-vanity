@@ -726,6 +726,21 @@ fn test_undo_no_nonce() {
     assert!(stdout.contains("nothing to undo"));
 }
 
+// --- Random preset ---
+
+#[test]
+fn test_random_preset() {
+    let dir = setup_temp_repo();
+    let out = binary()
+        .args(["-r", "--dry-run"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Random preset:"));
+}
+
 #[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();

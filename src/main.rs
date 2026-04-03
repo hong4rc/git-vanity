@@ -77,6 +77,10 @@ struct Cli {
     /// Number of worker threads
     #[arg(short = 'j', long, default_value_t = num_cpus::get())]
     threads: usize,
+
+    /// Pick a random preset
+    #[arg(short = 'r', long)]
+    random: bool,
 }
 
 /// Application error with exit code mapping (railway-oriented error handling).
@@ -131,25 +135,38 @@ fn run() -> Result<(), AppError> {
         _ => {}
     }
 
-    // Resolve pattern: --preset takes priority, then positional arg
-    let pattern_str = cli
-        .preset
-        .as_deref()
-        .map(|name| {
-            preset::find(name)
-                .map(|p| p.hex.to_string())
-                .ok_or_else(|| {
-                    AppError::Args(format!(
-                        "Unknown preset '{}'. Use --list-presets to see available options.",
-                        name
-                    ))
-                })
-        })
-        .transpose()?
-        .or(cli.pattern.clone())
-        .ok_or_else(|| {
-            AppError::Args("No pattern specified. Use a hex pattern or --preset (-p).".into())
-        })?;
+    // Resolve pattern: --random > --preset > positional arg
+    let pattern_str = if cli.random {
+        let idx = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as usize)
+            % preset::PRESETS.len();
+        let p = &preset::PRESETS[idx];
+        eprintln!("Random preset: {} ({})", p.name, p.hex);
+        p.hex.to_string()
+    } else {
+        cli.preset
+            .as_deref()
+            .map(|name| {
+                preset::find(name)
+                    .map(|p| p.hex.to_string())
+                    .ok_or_else(|| {
+                        AppError::Args(format!(
+                            "Unknown preset '{}'. Use --list-presets to see available options.",
+                            name
+                        ))
+                    })
+            })
+            .transpose()?
+            .or(cli.pattern.clone())
+            .ok_or_else(|| {
+                AppError::Args(
+                    "No pattern specified. Use a hex pattern, --preset (-p), or --random (-r)."
+                        .into(),
+                )
+            })?
+    };
 
     // Validate environment
     git::ensure_repo().map_err(AppError::Git)?;
@@ -239,8 +256,8 @@ fn run() -> Result<(), AppError> {
                     let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
                     let bar_width = 20;
                     let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
-                    let bar: String = "\u{2588}".repeat(filled)
-                        + &"\u{2591}".repeat(bar_width - filled);
+                    let bar: String =
+                        "\u{2588}".repeat(filled) + &"\u{2591}".repeat(bar_width - filled);
                     format!(
                         "\r{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
                         frames[i % frames.len()],
