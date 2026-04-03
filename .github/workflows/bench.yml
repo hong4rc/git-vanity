@@ -35,6 +35,11 @@ jobs:
             --branch main \
             --testbed ubuntu-latest \
             --adapter rust_bench \
+            --threshold-measure latency \
+            --threshold-test percentage \
+            --threshold-upper-boundary 0.10 \
+            --thresholds-reset \
+            --err \
             --file output.txt
 
       - name: PR benchmark comment
@@ -48,5 +53,10 @@ jobs:
             --start-point main \
             --testbed ubuntu-latest \
             --adapter rust_bench \
+            --threshold-measure latency \
+            --threshold-test percentage \
+            --threshold-upper-boundary 0.10 \
+            --thresholds-reset \
+            --err \
             --file output.txt \
             --github-actions "${{ secrets.GITHUB_TOKEN }}"
