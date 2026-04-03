@@ -246,37 +246,29 @@ fn run() -> Result<(), AppError> {
                     break;
                 }
                 let elapsed = start.elapsed().as_secs_f64();
-                let speed = if elapsed > 0.2 {
-                    attempts as f64 / elapsed
-                } else {
-                    0.0
-                };
 
-                // Progress bar with ETA when we have stable speed
-                let progress_str = if est_attempts > 0 && speed > 0.0 {
-                    let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(100.0);
-                    let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
-                    let bar_width = 20;
-                    let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
-                    let bar: String =
-                        "\u{2588}".repeat(filled) + &"\u{2591}".repeat(bar_width - filled);
-                    format!(
-                        "\r{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
-                        frames[i % frames.len()],
-                        bar,
-                        pct,
-                        speed / 1_000_000.0,
-                        format_duration_short(remaining)
-                    )
-                } else {
-                    format!(
-                        "\r{} Searching... {} | {:.0}M/s  ",
-                        frames[i % frames.len()],
-                        format_number(attempts),
-                        speed / 1_000_000.0
-                    )
-                };
-                eprint!("{}", progress_str);
+                // Skip rendering until we have meaningful data
+                if attempts == 0 || elapsed < 0.3 {
+                    i += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                }
+
+                let speed = attempts as f64 / elapsed;
+                let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(100.0);
+                let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
+                let bar_width = 20;
+                let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
+                let bar: String =
+                    "\u{2588}".repeat(filled) + &"\u{2591}".repeat(bar_width - filled);
+                eprint!(
+                    "\r{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
+                    frames[i % frames.len()],
+                    bar,
+                    pct,
+                    speed / 1_000_000.0,
+                    format_duration_short(remaining)
+                );
                 i += 1;
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
