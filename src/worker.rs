@@ -82,7 +82,7 @@ pub fn search(
     let found = Arc::new(AtomicBool::new(false));
     let total_attempts = progress.unwrap_or_else(|| Arc::new(AtomicU64::new(0)));
 
-    const BATCH_SIZE: u64 = 16384;
+    const BATCH_SIZE: u64 = 65536;
 
     let pattern = pattern.clone();
     let max_attempts = config.max_attempts;

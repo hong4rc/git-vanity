@@ -49,7 +49,7 @@ pub enum Pattern {
 }
 
 /// Extract the nibble at position `i` from a 20-byte SHA-1 hash.
-#[inline]
+#[inline(always)]
 fn nibble_at(hash: &[u8; 20], i: usize) -> u8 {
     let byte = hash[i / 2];
     if i % 2 == 0 { (byte >> 4) & 0x0F } else { byte & 0x0F }
@@ -71,7 +71,7 @@ fn nibbles_to_hex(nibbles: &[u8]) -> String {
 }
 
 /// Check if `nibbles` match at position `offset` in the hash.
-#[inline]
+#[inline(always)]
 fn nibbles_match_at(hash: &[u8; 20], nibbles: &[u8], offset: usize) -> bool {
     offset + nibbles.len() <= 40
         && nibbles

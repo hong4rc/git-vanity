@@ -8,6 +8,7 @@ const NONCE_LEN: usize = 10;
 
 /// Generate a nonce from a counter value and thread ID.
 /// Maps all bytes into the safe range 0x80–0xFF using bitwise OR.
+#[inline(always)]
 pub fn generate_nonce(counter: u64, thread_id: u16) -> [u8; NONCE_LEN] {
     let mut nonce = [0x80u8; NONCE_LEN];
 

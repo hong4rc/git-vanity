@@ -42,7 +42,7 @@ impl IncrementalHasher {
 
     /// Hash with a specific nonce. Clones the pre-computed state,
     /// feeds nonce + suffix, and finalizes.
-    #[inline]
+    #[inline(always)]
     pub fn hash_with_nonce(&self, nonce: &[u8]) -> [u8; 20] {
         let mut hasher = self.prefix_state.clone();
         hasher.update(nonce);
