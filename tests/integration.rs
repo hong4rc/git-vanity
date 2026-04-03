@@ -660,6 +660,72 @@ fn test_log_multiple_vanity() {
     assert!(stdout.contains("2/2 commits have vanity hashes"));
 }
 
+// --- Undo tests ---
+
+#[test]
+fn test_undo_removes_nonce() {
+    let dir = setup_temp_repo();
+
+    // Apply vanity
+    binary()
+        .args(["cafe"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let head_before = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let hash_before = String::from_utf8_lossy(&head_before.stdout)
+        .trim()
+        .to_string();
+    assert!(hash_before.starts_with("cafe"));
+
+    // Undo
+    let out = binary()
+        .args(["undo"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("nonce removed"));
+
+    // Hash should change
+    let head_after = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let hash_after = String::from_utf8_lossy(&head_after.stdout)
+        .trim()
+        .to_string();
+    assert_ne!(hash_before, hash_after);
+
+    // Should pass fsck
+    let fsck = Command::new("git")
+        .args(["fsck"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(fsck.status.success());
+}
+
+#[test]
+fn test_undo_no_nonce() {
+    let dir = setup_temp_repo();
+    let out = binary()
+        .args(["undo"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("nothing to undo"));
+}
+
 #[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();

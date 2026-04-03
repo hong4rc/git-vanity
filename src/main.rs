@@ -123,10 +123,11 @@ fn run() -> Result<(), AppError> {
         return Ok(());
     }
 
-    // Subcommands: show / log
+    // Subcommands: show / log / undo
     match cli.pattern.as_deref() {
         Some("show") => return show_vanity(),
         Some("log") => return vanity_log(),
+        Some("undo") => return undo_vanity(),
         _ => {}
     }
 
@@ -467,6 +468,48 @@ fn show_vanity() -> Result<(), AppError> {
         .next()
         .unwrap_or("");
     println!("Message: {}", msg);
+
+    Ok(())
+}
+
+/// Strip x-nonce from HEAD and restore the original hash.
+fn undo_vanity() -> Result<(), AppError> {
+    git::ensure_repo().map_err(AppError::Git)?;
+
+    let old_hash = git::get_head_hash().map_err(AppError::Git)?;
+    let raw = git::read_head_commit().map_err(AppError::Git)?;
+
+    if !raw.lines().any(|l| l.starts_with("x-nonce ")) {
+        println!("No vanity nonce found in HEAD — nothing to undo.");
+        return Ok(());
+    }
+
+    let commit = commit::CommitObject::parse(&raw).map_err(AppError::Git)?;
+
+    // Rebuild content without nonce (CommitObject already strips x-nonce)
+    let content: Vec<u8> = commit
+        .header_lines
+        .iter()
+        .flat_map(|line| line.as_bytes().iter().chain(std::iter::once(&b'\n')))
+        .chain(b"\n".iter())
+        .chain(commit.message.as_bytes().iter())
+        .copied()
+        .collect();
+
+    let new_hash = git::write_commit_object(&content)
+        .and_then(|hash| git::update_head(&hash).map(|()| hash))
+        .map_err(AppError::Git)?;
+
+    let color = supports_color();
+    println!(
+        "\u{2713} {} \u{2192} {} (nonce removed)",
+        if color {
+            bold_green(&old_hash[..12], true)
+        } else {
+            old_hash[..12].to_string()
+        },
+        &new_hash[..12]
+    );
 
     Ok(())
 }
