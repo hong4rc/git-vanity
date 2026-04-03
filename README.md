@@ -1,218 +1,128 @@
 # git-vanity
 
-Generate Git commit hashes matching custom patterns. Make your commits start with `cafe`, end with `dead`, or contain `c0ffee` anywhere.
+Make your Git commits look cool. Generate commit hashes that start with `cafe`, end with `dead`, or contain `c0ffee`.
 
 ```
-$ git commit -m "feat: add login"
 $ git vanity cafe
-✓ a1b2c3d4e5f6 → cafeb0ba1234... (42,567 attempts, 0.01s)
+✓ a1b2c3d4e5f6 → cafeb0ba1234...
 
 $ git log --oneline -1
 cafeb0b feat: add login
 ```
 
-The commit message, author, and date stay identical. Only an invisible `x-nonce` header is added.
+Nothing visible changes — same message, author, date. Just a prettier hash.
 
-> **Proof it works:** This repo's own commit starts with `000000` — check `git log --oneline` to see it.
+> Every commit in this repo starts with `000000`. Run `git log --oneline` to verify.
 
 ## Install
 
-**Homebrew** (macOS/Linux):
 ```bash
-brew install hong4rc/tap/git-vanity
+brew install hong4rc/tap/git-vanity     # Homebrew
+cargo install git-vanity                 # Cargo
+npx git-vanity cafe                      # npm (no install)
 ```
 
-**npm** (any platform):
-```bash
-npx git-vanity cafe
-# or install globally
-npm install -g git-vanity
-```
+Or download a binary from [Releases](https://github.com/hong4rc/git-vanity/releases).
 
-**Cargo** (from source):
-```bash
-cargo install git-vanity
-```
-
-**GitHub Releases** (prebuilt binaries):
-
-Download from [Releases](https://github.com/hong4rc/git-vanity/releases) for macOS (Intel + ARM), Linux (x64 + arm64), and Windows.
-
-**Build locally:**
-```bash
-cargo build --release
-# Binary at ./target/release/git-vanity
-```
-
-## Usage
+## Quick Start
 
 ```bash
-git vanity <pattern> [options]
+git vanity cafe                  # starts with cafe
+git vanity cafe -m end           # ends with cafe
+git vanity cafe -m contains      # cafe anywhere (fastest)
+git vanity -p coffee             # preset: c0ffee
+git vanity -p dead -m end        # preset + position
+git vanity show                  # inspect current commit
+git vanity log                   # see vanity stats for repo
 ```
 
-### Patterns
+## Patterns
 
-| Type | Syntax | Example | Matches |
-|------|--------|---------|---------|
-| Prefix | `<hex>` | `git vanity cafe` | Hash starts with `cafe` |
-| Repeat | `repeat:<n>` | `git vanity repeat:3` | Any run of 3 identical chars (`aaa`, `111`) |
-| Structured | `<hex>x{n}` | `git vanity 1997xxx` | `1997` + 3 identical chars |
-| Pair | `xx` | `git vanity xx` | Any 2 identical adjacent chars |
-| Regex | `/<regex>/` | `git vanity "/^dead/"` | Regex against hex hash |
+| Type | Example | What it does |
+|------|---------|-------------|
+| Hex prefix | `git vanity cafe` | Hash starts with `cafe` |
+| Repeat | `git vanity repeat:3` | 3 identical chars anywhere (`aaa`) |
+| Structured | `git vanity 1997xxx` | `1997` + 3 identical chars |
+| Pair | `git vanity xx` | Any adjacent pair (`aa`, `ff`) |
+| Regex | `git vanity "/^dead/"` | Full regex on hex hash |
 
-### Match Position
+## Presets
 
-By default, patterns match at the **start** of the hash. Use `-m` to match elsewhere:
-
-```bash
-git vanity cafe                 # cafeb0ba1234...   (start — default)
-git vanity cafe -m end          # ...9fde699cafe    (end of hash)
-git vanity cafe -m contains     # ...17cafe995...   (anywhere in hash)
-```
-
-`contains` is much faster since any position in the 40-char hash can match.
-
-### Presets
-
-Use `-p` for curated hex words:
-
-```bash
-git vanity -p cafe              # hash starts with cafe
-git vanity -p coffee -m end     # hash ends with c0ffee
-git vanity -p dead -m contains  # hash contains dead
-git vanity --list-presets       # see all 27 presets
-```
-
-Available presets:
+27 curated hex words. Run `git vanity --list-presets` to see all.
 
 ```
-ace      ace       instant    add      add       instant
-bad      bad       instant    babe     babe      < 1s
-beef     beef      < 1s       cafe     cafe      < 1s
-code     c0de      < 1s       dead     dead      < 1s
-face     face      < 1s       food     f00d      < 1s
-feed     feed      < 1s       decaf    decaf     ~ 2s
-coffee   c0ffee    ~ 5s       decade   decade    ~ 5s
-facade   facade    ~ 5s       defaced  defaced   ~ 30s+
+ace  add  bad  bed  cab  dad  fab  fed     instant
+babe bead beef cafe code dead deaf face    < 1s
+fade feed food decaf                       ~ 2s
+coffee decade deface facade                ~ 5s
+defaced effaced                            ~ 30s+
 ```
 
-### Dry Run
+## Options
 
-Use `-n` to preview the match before writing. In an interactive terminal, it will ask to apply:
+| Flag | Description |
+|------|------------|
+| `-m start\|contains\|end` | Where to match (default: `start`) |
+| `-p <name>` | Use a preset hex word |
+| `-n` | Dry run — preview, then ask to apply |
+| `-t <ms>` | Timeout (default: 30s) |
+| `-j <n>` | Threads (default: all cores) |
+| `-d` | Debug — show speed and attempt count |
+| `-q` | Quiet — hide progress spinner |
+| `--list-presets` | Show all presets |
+| `--message <msg>` | Override commit message |
+| `--max-attempts <n>` | Stop after N attempts |
 
-```bash
-$ git vanity 000000 -n
-✓ Found matching hash: 00000075b362... (143,602,767 attempts, 7.96s)
-Apply? [Y/n] y
-✓ 0000073d64ed → 00000075b362... (applied)
-```
-
-This avoids searching twice — preview and apply in one step.
-
-### Show Vanity Info
-
-Check if HEAD has a vanity hash:
-
-```bash
-$ git vanity show
-Commit: 000000ee199f14cd13dee8803da93a8dfc8757cd
-Vanity: yes (x-nonce present)
-Prefix:  000000 (6 identical chars)
-Message: ux: bell notification on long searches (> 2s)
-```
-
-### Vanity Log
-
-See which commits in your repo have vanity hashes:
-
-```bash
-$ git vanity log
-✓ 000000d chore: remove unused deps (rand, atty), use std::io::IsTerminal
-✓ 0000005 ux: add 'git vanity show' to inspect HEAD vanity status
-✓ 000000e ux: bell notification on long searches (> 2s)
-  ...
-17/17 commits have vanity hashes
-```
-
-### Options
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--match <pos>` | `-m` | `start` | Where to match: `start`, `contains`, or `end` |
-| `--preset <name>` | `-p` | | Use a preset hex word |
-| `--list-presets` | | | List all available presets |
-| `--dry-run` | `-n` | | Preview match, then ask to apply |
-| `--message <msg>` | | HEAD's message | Override commit message |
-| `--timeout <ms>` | `-t` | `30000` | Abort after N milliseconds |
-| `--max-attempts <n>` | | unlimited | Abort after N hash attempts |
-| `--debug` | `-d` | | Show throughput metrics |
-| `--no-repeat` | | | Disable structured pattern detection |
-| `--threads <n>` | `-j` | num cpus | Number of worker threads |
-| `--quiet` | `-q` | | Hide progress spinner |
-
-Use `git vanity show` to inspect HEAD's vanity status.
-
-A terminal bell plays when searches take longer than 2 seconds.
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Invalid arguments / pattern |
-| 2 | Timeout or max-attempts reached |
-| 3 | Git error (not a repo, no HEAD) |
+Exit codes: `0` success, `1` bad args, `2` timeout, `3` git error.
 
 ## How It Works
 
-A Git commit hash is `SHA-1(commit <len>\0<header>\n<message>)`. By appending a hidden `x-nonce` field to the commit header and brute-forcing its value, we search for a hash matching the desired pattern — without altering any user-visible data.
+Git hashes are `SHA-1(commit object)`. We append an invisible `x-nonce` header and brute-force its value until the hash matches. The commit message and all visible metadata stay identical.
 
-### Performance
+## Performance
 
-| Pattern | Expected Time |
-|---------|--------------|
-| 4-char prefix (`cafe`) | < 1 second |
-| 6-char prefix (`c0ffee`) | < 5 seconds |
-| 6-char contains (`c0ffee`) | < 0.1 seconds |
-| 8-char prefix | < 60 seconds |
+~120M hashes/sec on 8 cores (Apple Silicon, release build).
 
-Throughput: ~50M hashes/sec on 8 cores (release build).
+| Pattern | Time |
+|---------|------|
+| 4-char (`cafe`) | instant |
+| 6-char (`c0ffee`) | ~0.2s |
+| 6-char contains | ~0.01s |
+| 7-char (`0000000`) | ~3s |
+| 8-char | ~60s |
 
-### Architecture
+## Design
 
-- **Incremental SHA-1**: Pre-computes hash state up to the nonce, clones per attempt
-- **Lock-free workers**: N threads with `AtomicBool` stop signal, batched checking
-- **Nibble matching**: Compares raw bytes for prefix patterns (no hex encoding in hot loop)
-- **Zero-allocation hot loop**: Stack-allocated nonces, no heap alloc per attempt
+Written in Rust using functional programming patterns:
+
+- **Chain of responsibility** — pattern parsing via `find_map` over parser functions
+- **Fold-based state machine** — commit header parsing without mutable flags
+- **Iterator pipelines** — `from_fn` + `find_map` for the worker hot loop
+- **Railway-oriented errors** — `Result` chains with typed `AppError` for clean control flow
+- **Higher-order functions** — `run_git()` eliminates git command boilerplate
+- **Incremental SHA-1** — pre-compute hash state, clone per attempt (immutable, FP-clean)
+- **Lock-free concurrency** — `AtomicBool` + `AtomicU64` with `Relaxed` ordering
 
 ```
 src/
-  main.rs      — CLI entry, arg parsing (clap)
-  pattern.rs   — Pattern parsing & matching (chain-of-responsibility)
-  preset.rs    — Curated hex word presets
-  commit.rs    — Git commit parsing (fold-based state machine)
-  hasher.rs    — Incremental SHA-1 hashing
-  worker.rs    — Multi-threaded brute-force coordinator
-  nonce.rs     — Nonce generation (0x80-0xFF safe range)
-  git.rs       — Git plumbing operations
+  main.rs      CLI + railway-oriented error handling
+  pattern.rs   Chain-of-responsibility parser + nibble matching
+  preset.rs    Curated hex word dictionary
+  commit.rs    Fold-based commit parser
+  hasher.rs    Incremental SHA-1 (clone, not mutate)
+  worker.rs    Lock-free multi-threaded search (from_fn + find_map)
+  nonce.rs     Safe byte-range nonce generation
+  git.rs       Higher-order git command helpers
 ```
 
 ## Auto-Vanity Hook
 
-This repo includes a `post-commit` hook that automatically rewrites every commit to start with `000000`. It activates on first `cargo build` via `build.rs`.
-
-To set it up manually:
+This repo auto-vanities every commit to `000000`. Activates on `cargo build` via `build.rs`.
 
 ```bash
-git config core.hooksPath hooks
+git config core.hooksPath hooks   # manual setup
 ```
-
-Every commit in this repo proves the tool works — check `git log --oneline`.
-
-## Author
-
-**hong4rc** — [github.com/hong4rc](https://github.com/hong4rc)
 
 ## License
 
-Source Available — free for personal and open-source use. Commercial use requires a paid license. See [LICENSE](LICENSE) for details.
+[Business Source License 1.1](LICENSE) — free for non-commercial use. Converts to MIT on 2030-04-03.
