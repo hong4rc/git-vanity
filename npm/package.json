@@ -1,0 +1,24 @@
+{
+  "name": "git-vanity",
+  "version": "0.1.0",
+  "description": "Generate Git commit hashes matching custom patterns (vanity hashes)",
+  "bin": {
+    "git-vanity": "bin/index.js"
+  },
+  "scripts": {
+    "postinstall": "node bin/install.js"
+  },
+  "keywords": ["git", "vanity", "hash", "cli", "commit"],
+  "author": "hong4rc",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hong4rc/git-vanity"
+  },
+  "homepage": "https://github.com/hong4rc/git-vanity",
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"],
+  "engines": {
+    "node": ">=14"
+  }
+}
