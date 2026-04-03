@@ -420,18 +420,43 @@ fn show_vanity() -> Result<(), AppError> {
     Ok(())
 }
 
+/// Check if a hash has a recognizable vanity pattern:
+/// - 4+ leading identical chars (e.g. 000000, aaaabc)
+/// - Matches any preset (start or end)
+fn is_vanity_hash(hash: &str) -> bool {
+    // Check leading repeat (4+ identical chars)
+    let leading = hash
+        .chars()
+        .take_while(|&c| c == hash.chars().next().unwrap_or(' '))
+        .count();
+    if leading >= 4 {
+        return true;
+    }
+
+    // Check preset match (start or end)
+    preset::PRESETS
+        .iter()
+        .any(|p| p.hex.len() >= 4 && (hash.starts_with(p.hex) || hash.ends_with(p.hex)))
+}
+
 /// Show vanity stats for recent commits.
+/// Validates both: x-nonce present AND hash shows a real pattern.
 fn vanity_log() -> Result<(), AppError> {
     git::ensure_repo().map_err(AppError::Git)?;
 
     let entries = git::log_with_nonce_info(50).map_err(AppError::Git)?;
     let color = supports_color();
-    let vanity_count = entries.iter().filter(|(_, has, _)| *has).count();
+
+    let vanity_count = entries
+        .iter()
+        .filter(|(hash, has_nonce, _)| *has_nonce && is_vanity_hash(hash))
+        .count();
 
     entries.iter().for_each(|(hash, has_nonce, subject)| {
         let short = &hash[..7];
-        let marker = if *has_nonce { "\u{2713}" } else { " " };
-        let colored_hash = if *has_nonce && color {
+        let valid = *has_nonce && is_vanity_hash(hash);
+        let marker = if valid { "\u{2713}" } else { " " };
+        let colored_hash = if valid && color {
             bold_green(short, true)
         } else {
             short.to_string()
