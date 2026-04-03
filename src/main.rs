@@ -229,30 +229,32 @@ fn run() -> Result<(), AppError> {
         position,
     };
 
-    // Progress bar with ETA on TTY unless --quiet
-    let show_progress = !cli.quiet && !cli.debug && std::io::stderr().is_terminal();
+    // Progress bar with ETA on TTY unless --quiet or trivial pattern
+    let show_progress =
+        !cli.quiet && !cli.debug && std::io::stderr().is_terminal() && est > 100_000; // skip bar for instant matches
     let spinner_counter = Arc::clone(&progress_counter);
     let est_attempts = est;
     let spinner_handle = show_progress.then(|| {
         std::thread::spawn(move || {
             let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
             let mut i = 0usize;
+            // Wait 300ms before first display to get stable speed reading
+            std::thread::sleep(std::time::Duration::from_millis(300));
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(100));
                 let attempts = spinner_counter.load(Ordering::Relaxed);
                 if attempts == u64::MAX {
-                    break; // signal to stop
+                    break;
                 }
                 let elapsed = start.elapsed().as_secs_f64();
-                let speed = if elapsed > 0.0 {
+                let speed = if elapsed > 0.2 {
                     attempts as f64 / elapsed
                 } else {
                     0.0
                 };
 
-                // Progress bar with ETA when we have an estimate
+                // Progress bar with ETA when we have stable speed
                 let progress_str = if est_attempts > 0 && speed > 0.0 {
-                    let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(999.0);
+                    let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(100.0);
                     let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
                     let bar_width = 20;
                     let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
@@ -276,6 +278,7 @@ fn run() -> Result<(), AppError> {
                 };
                 eprint!("{}", progress_str);
                 i += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             eprint!("\r\x1b[K"); // clear spinner line
         })
