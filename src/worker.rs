@@ -57,8 +57,7 @@ fn assemble_content(prefix: &[u8], nonce: &[u8], suffix: &[u8]) -> Vec<u8> {
 /// Check if the search should stop (found or max attempts reached).
 #[inline]
 fn should_stop(found: &AtomicBool, total: &AtomicU64, max: Option<u64>) -> bool {
-    found.load(Ordering::Relaxed)
-        || max.map_or(false, |m| total.load(Ordering::Relaxed) >= m)
+    found.load(Ordering::Relaxed) || max.is_some_and(|m| total.load(Ordering::Relaxed) >= m)
 }
 
 /// Multi-threaded brute-force coordinator.

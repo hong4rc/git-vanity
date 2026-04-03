@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::path::Path;
+use std::process::Command;
 
 fn binary() -> Command {
     let path = Path::new(env!("CARGO_BIN_EXE_git-vanity"));
@@ -16,7 +16,16 @@ fn setup_temp_repo() -> tempfile::TempDir {
             .unwrap()
     };
     run(&["init"]);
-    run(&["-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "--allow-empty", "-m", "initial commit"]);
+    run(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@test.com",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "initial commit",
+    ]);
     dir
 }
 
@@ -549,7 +558,16 @@ fn test_log_mixed_commits() {
     // First commit is plain (no vanity)
     // Add a second commit with vanity
     Command::new("git")
-        .args(["-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "--allow-empty", "-m", "second commit"])
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@test.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "second commit",
+        ])
         .current_dir(dir.path())
         .output()
         .unwrap();
@@ -612,7 +630,16 @@ fn test_log_multiple_vanity() {
         .unwrap();
 
     Command::new("git")
-        .args(["-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "--allow-empty", "-m", "second"])
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@test.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "second",
+        ])
         .current_dir(dir.path())
         .output()
         .unwrap();
@@ -636,9 +663,6 @@ fn test_log_multiple_vanity() {
 #[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();
-    let out = binary()
-        .current_dir(dir.path())
-        .output()
-        .unwrap();
+    let out = binary().current_dir(dir.path()).output().unwrap();
     assert_ne!(out.status.code(), Some(0));
 }

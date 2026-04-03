@@ -3,7 +3,6 @@
 /// Each thread gets a unique base + thread_id offset.
 /// Nonces use bytes in range 0x80–0xFF to stay non-printable
 /// and avoid 0x0A (newline) which would break the header.
-
 const NONCE_LEN: usize = 10;
 
 /// Generate a nonce from a counter value and thread ID.

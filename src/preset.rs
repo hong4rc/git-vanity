@@ -12,37 +12,145 @@ pub struct Preset {
 /// All available presets, sorted by difficulty (easiest first).
 pub const PRESETS: &[Preset] = &[
     // 3-char — instant
-    Preset { name: "ace",      hex: "ace",      description: "an ace up your sleeve" },
-    Preset { name: "add",      hex: "add",      description: "add something new" },
-    Preset { name: "bad",      hex: "bad",      description: "bad to the bone" },
-    Preset { name: "bed",      hex: "bed",      description: "time for bed" },
-    Preset { name: "cab",      hex: "cab",      description: "hail a cab" },
-    Preset { name: "dad",      hex: "dad",      description: "hi dad" },
-    Preset { name: "fab",      hex: "fab",      description: "fabulous" },
-    Preset { name: "fed",      hex: "fed",      description: "well fed" },
+    Preset {
+        name: "ace",
+        hex: "ace",
+        description: "an ace up your sleeve",
+    },
+    Preset {
+        name: "add",
+        hex: "add",
+        description: "add something new",
+    },
+    Preset {
+        name: "bad",
+        hex: "bad",
+        description: "bad to the bone",
+    },
+    Preset {
+        name: "bed",
+        hex: "bed",
+        description: "time for bed",
+    },
+    Preset {
+        name: "cab",
+        hex: "cab",
+        description: "hail a cab",
+    },
+    Preset {
+        name: "dad",
+        hex: "dad",
+        description: "hi dad",
+    },
+    Preset {
+        name: "fab",
+        hex: "fab",
+        description: "fabulous",
+    },
+    Preset {
+        name: "fed",
+        hex: "fed",
+        description: "well fed",
+    },
     // 4-char — < 1s
-    Preset { name: "babe",     hex: "babe",     description: "hey babe" },
-    Preset { name: "bead",     hex: "bead",     description: "string of beads" },
-    Preset { name: "beef",     hex: "beef",     description: "where's the beef?" },
-    Preset { name: "cafe",     hex: "cafe",     description: "coffee shop vibes" },
-    Preset { name: "code",     hex: "c0de",     description: "write some c0de" },
-    Preset { name: "daze",     hex: "da2e",     description: "in a da2e" },
-    Preset { name: "dead",     hex: "dead",     description: "dead commit walking" },
-    Preset { name: "deaf",     hex: "deaf",     description: "deaf to criticism" },
-    Preset { name: "face",     hex: "face",     description: "save face" },
-    Preset { name: "fade",     hex: "fade",     description: "fade to black" },
-    Preset { name: "feed",     hex: "feed",     description: "feed the code" },
-    Preset { name: "food",     hex: "f00d",     description: "f00d for thought" },
+    Preset {
+        name: "babe",
+        hex: "babe",
+        description: "hey babe",
+    },
+    Preset {
+        name: "bead",
+        hex: "bead",
+        description: "string of beads",
+    },
+    Preset {
+        name: "beef",
+        hex: "beef",
+        description: "where's the beef?",
+    },
+    Preset {
+        name: "cafe",
+        hex: "cafe",
+        description: "coffee shop vibes",
+    },
+    Preset {
+        name: "code",
+        hex: "c0de",
+        description: "write some c0de",
+    },
+    Preset {
+        name: "daze",
+        hex: "da2e",
+        description: "in a da2e",
+    },
+    Preset {
+        name: "dead",
+        hex: "dead",
+        description: "dead commit walking",
+    },
+    Preset {
+        name: "deaf",
+        hex: "deaf",
+        description: "deaf to criticism",
+    },
+    Preset {
+        name: "face",
+        hex: "face",
+        description: "save face",
+    },
+    Preset {
+        name: "fade",
+        hex: "fade",
+        description: "fade to black",
+    },
+    Preset {
+        name: "feed",
+        hex: "feed",
+        description: "feed the code",
+    },
+    Preset {
+        name: "food",
+        hex: "f00d",
+        description: "f00d for thought",
+    },
     // 5-char — ~ 1-2s
-    Preset { name: "decaf",    hex: "decaf",    description: "decaf coffee" },
+    Preset {
+        name: "decaf",
+        hex: "decaf",
+        description: "decaf coffee",
+    },
     // 6-char — ~ 5s
-    Preset { name: "coffee",   hex: "c0ffee",   description: "powered by c0ffee" },
-    Preset { name: "decade",   hex: "decade",   description: "a decade of commits" },
-    Preset { name: "deface",   hex: "deface",   description: "deface the hash" },
-    Preset { name: "facade",   hex: "facade",   description: "behind the facade" },
+    Preset {
+        name: "coffee",
+        hex: "c0ffee",
+        description: "powered by c0ffee",
+    },
+    Preset {
+        name: "decade",
+        hex: "decade",
+        description: "a decade of commits",
+    },
+    Preset {
+        name: "deface",
+        hex: "deface",
+        description: "deface the hash",
+    },
+    Preset {
+        name: "facade",
+        hex: "facade",
+        description: "behind the facade",
+    },
     // 7-char — ~ 30s+
-    Preset { name: "defaced",  hex: "defaced",  description: "defaced and proud" },
-    Preset { name: "effaced",  hex: "effaced",  description: "effaced from history" },
+    Preset {
+        name: "defaced",
+        hex: "defaced",
+        description: "defaced and proud",
+    },
+    Preset {
+        name: "effaced",
+        hex: "effaced",
+        description: "effaced from history",
+    },
 ];
 
 /// Find a preset by name (case-insensitive).
@@ -61,10 +169,10 @@ pub fn list() -> String {
         .map(|p| {
             let difficulty = match p.hex.len() {
                 0..=3 => "instant",
-                4     => "< 1s",
-                5     => "~ 2s",
-                6     => "~ 5s",
-                _     => "~ 30s+",
+                4 => "< 1s",
+                5 => "~ 2s",
+                6 => "~ 5s",
+                _ => "~ 30s+",
             };
             format!(
                 "  {:<width_n$}  {:<width_h$}  {:>8}  {}",

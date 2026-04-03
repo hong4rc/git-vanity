@@ -24,7 +24,12 @@ use std::time::Instant;
 ///   git vanity cafe -n             Preview match, then ask to apply
 ///   git vanity --list-presets      Show all preset hex words
 #[derive(Parser, Debug)]
-#[command(name = "git-vanity", version, about, after_help = "See --list-presets for curated hex words like cafe, dead, c0ffee.")]
+#[command(
+    name = "git-vanity",
+    version,
+    about,
+    after_help = "See --list-presets for curated hex words like cafe, dead, c0ffee."
+)]
 struct Cli {
     /// Pattern to match (hex prefix, repeat:N, xx, or /regex/)
     pattern: Option<String>,
@@ -175,7 +180,10 @@ fn run() -> Result<(), AppError> {
     if cli.debug {
         eprintln!("[vanity] threads: {}", cli.threads);
         eprintln!("[vanity] pattern: {} ({})", pat, position);
-        eprintln!("[vanity] estimated attempts: {}", pat.estimated_attempts(position));
+        eprintln!(
+            "[vanity] estimated attempts: {}",
+            pat.estimated_attempts(position)
+        );
     }
 
     // Show estimated time and warn for hard patterns
@@ -240,7 +248,7 @@ fn run() -> Result<(), AppError> {
             progress_counter.store(u64::MAX, Ordering::Relaxed);
             if let Some(h) = spinner_handle.as_ref() {
                 // Wait briefly for spinner to clear
-                let _ = h.thread().unpark();
+                h.thread().unpark();
             }
             std::thread::sleep(std::time::Duration::from_millis(150));
             AppError::Timeout(e)
@@ -294,7 +302,11 @@ fn run() -> Result<(), AppError> {
                     .and_then(|hash| git::update_head(&hash).map(|()| hash))
                     .map_err(AppError::Git)?;
                 let new_preview = format_hash(&new_hash, &pattern_str, position);
-                println!("\u{2713} {} \u{2192} {} (applied)", &old_hash[..12], new_preview);
+                println!(
+                    "\u{2713} {} \u{2192} {} (applied)",
+                    &old_hash[..12],
+                    new_preview
+                );
             }
         }
         return Ok(());
@@ -323,7 +335,11 @@ fn supports_color() -> bool {
 
 /// Wrap text in bold green ANSI codes if color is supported.
 fn bold_green(text: &str, color: bool) -> String {
-    if color { format!("\x1b[1;32m{}\x1b[0m", text) } else { text.to_string() }
+    if color {
+        format!("\x1b[1;32m{}\x1b[0m", text)
+    } else {
+        text.to_string()
+    }
 }
 
 /// Format hash with pattern highlighted in color.
@@ -341,15 +357,22 @@ fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
         }
         MatchPosition::End => {
             let show = 12.max(pat.len()).min(hash.len());
-            (hash.len() - show, hash.len() - pat.len(), hash.len(), hash.len())
+            (
+                hash.len() - show,
+                hash.len() - pat.len(),
+                hash.len(),
+                hash.len(),
+            )
         }
-        MatchPosition::Contains => hash.find(&pat).map_or(
-            (0, 0, 0, hash.len()),
-            |pos| {
-                let ctx = 3;
-                (pos.saturating_sub(ctx), pos, pos + pat.len(), (pos + pat.len() + ctx).min(hash.len()))
-            },
-        ),
+        MatchPosition::Contains => hash.find(&pat).map_or((0, 0, 0, hash.len()), |pos| {
+            let ctx = 3;
+            (
+                pos.saturating_sub(ctx),
+                pos,
+                pos + pat.len(),
+                (pos + pat.len() + ctx).min(hash.len()),
+            )
+        }),
     };
 
     // Assemble: dots + before + highlighted(matched) + after + dots
@@ -373,11 +396,14 @@ fn show_vanity() -> Result<(), AppError> {
     let has_nonce = raw.lines().any(|l| l.starts_with("x-nonce "));
     let color = supports_color();
 
-    println!("Commit: {}", if color {
-        bold_green(&hash, true)
-    } else {
-        hash.clone()
-    });
+    println!(
+        "Commit: {}",
+        if color {
+            bold_green(&hash, true)
+        } else {
+            hash.clone()
+        }
+    );
 
     if has_nonce {
         // Find matching presets
@@ -401,7 +427,11 @@ fn show_vanity() -> Result<(), AppError> {
         }
 
         if prefix_len >= 2 {
-            println!("Prefix:  {} ({} identical chars)", &hash[..prefix_len + 1], prefix_len + 1);
+            println!(
+                "Prefix:  {} ({} identical chars)",
+                &hash[..prefix_len + 1],
+                prefix_len + 1
+            );
         }
     } else {
         println!("Vanity: no (no x-nonce header)");

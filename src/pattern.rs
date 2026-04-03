@@ -41,25 +41,30 @@ pub enum Pattern {
     /// Match N identical consecutive chars: `repeat:3` → aaa, 111, fff
     Repeat(usize),
     /// Structured: `1997xxx` → prefix "1997" + 3 identical chars
-    Structured { prefix_nibbles: Vec<u8>, repeat_count: usize },
+    Structured {
+        prefix_nibbles: Vec<u8>,
+        repeat_count: usize,
+    },
     /// Pair: `xx` → any 2 identical adjacent hex chars
     Pair,
     /// Regex: `/pattern/`
-    RegexPattern(Regex),
+    Regex(Regex),
 }
 
 /// Extract the nibble at position `i` from a 20-byte SHA-1 hash.
 #[inline(always)]
 fn nibble_at(hash: &[u8; 20], i: usize) -> u8 {
     let byte = hash[i / 2];
-    if i % 2 == 0 { (byte >> 4) & 0x0F } else { byte & 0x0F }
+    if i.is_multiple_of(2) {
+        (byte >> 4) & 0x0F
+    } else {
+        byte & 0x0F
+    }
 }
 
 /// Parse a lowercase hex string into a Vec of nibble values (0-15).
 fn hex_to_nibbles(s: &str) -> Vec<u8> {
-    s.chars()
-        .map(|c| c.to_digit(16).unwrap() as u8)
-        .collect()
+    s.chars().map(|c| c.to_digit(16).unwrap() as u8).collect()
 }
 
 /// Convert nibbles back to a hex string for display.
@@ -85,19 +90,29 @@ impl fmt::Display for Pattern {
         match self {
             Pattern::Prefix(nibbles) => write!(f, "prefix(\"{}\")", nibbles_to_hex(nibbles)),
             Pattern::Repeat(n) => write!(f, "repeat({})", n),
-            Pattern::Structured { prefix_nibbles, repeat_count } => {
-                write!(f, "structured(\"{}\"+{}x)", nibbles_to_hex(prefix_nibbles), repeat_count)
+            Pattern::Structured {
+                prefix_nibbles,
+                repeat_count,
+            } => {
+                write!(
+                    f,
+                    "structured(\"{}\"+{}x)",
+                    nibbles_to_hex(prefix_nibbles),
+                    repeat_count
+                )
             }
             Pattern::Pair => write!(f, "pair"),
-            Pattern::RegexPattern(r) => write!(f, "regex(\"{}\")", r.as_str()),
+            Pattern::Regex(r) => write!(f, "regex(\"{}\")", r.as_str()),
         }
     }
 }
 
+type PatternParser = fn(&str, bool) -> Option<Result<Pattern, String>>;
+
 impl Pattern {
     /// Parse using chain-of-responsibility: each parser returns Some if it handles the input.
     pub fn parse(input: &str, no_repeat: bool) -> Result<Self, String> {
-        let parsers: &[fn(&str, bool) -> Option<Result<Pattern, String>>] = &[
+        let parsers: &[PatternParser] = &[
             Self::parse_regex,
             Self::parse_repeat,
             Self::parse_pair,
@@ -118,7 +133,7 @@ impl Pattern {
             .filter(|s| !s.is_empty())
             .map(|regex_str| {
                 Regex::new(regex_str)
-                    .map(Pattern::RegexPattern)
+                    .map(Pattern::Regex)
                     .map_err(|e| format!("Invalid regex: {}", e))
             })
     }
@@ -202,7 +217,10 @@ impl Pattern {
                 false
             }
 
-            Pattern::Structured { prefix_nibbles, repeat_count } => match position {
+            Pattern::Structured {
+                prefix_nibbles,
+                repeat_count,
+            } => match position {
                 MatchPosition::Start => {
                     nibbles_match_at(hash, prefix_nibbles, 0) && {
                         let start = prefix_nibbles.len();
@@ -237,17 +255,21 @@ impl Pattern {
                     let hi = (b >> 4) & 0x0F;
                     let lo = b & 0x0F;
                     // Within-byte pair
-                    if hi == lo { return true; }
+                    if hi == lo {
+                        return true;
+                    }
                     // Cross-byte pair (low of this byte == high of next)
                     if i < 19 {
                         let next_hi = (hash[i + 1] >> 4) & 0x0F;
-                        if lo == next_hi { return true; }
+                        if lo == next_hi {
+                            return true;
+                        }
                     }
                     false
                 })
             }
 
-            Pattern::RegexPattern(re) => re.is_match(&hex::encode(hash)),
+            Pattern::Regex(re) => re.is_match(&hex::encode(hash)),
         }
     }
 
@@ -256,11 +278,12 @@ impl Pattern {
         let base = match self {
             Pattern::Prefix(nibbles) => 16u64.pow(nibbles.len() as u32),
             Pattern::Repeat(n) => 16u64.pow(*n as u32) / 16,
-            Pattern::Structured { prefix_nibbles, repeat_count } => {
-                16u64.pow(prefix_nibbles.len() as u32) * 16u64.pow(*repeat_count as u32) / 16
-            }
+            Pattern::Structured {
+                prefix_nibbles,
+                repeat_count,
+            } => 16u64.pow(prefix_nibbles.len() as u32) * 16u64.pow(*repeat_count as u32) / 16,
             Pattern::Pair => 16,
-            Pattern::RegexPattern(_) => 1_000_000,
+            Pattern::Regex(_) => 1_000_000,
         };
 
         // Contains/End are easier for Prefix/Structured because there are more
@@ -268,9 +291,14 @@ impl Pattern {
         match (self, position) {
             (Pattern::Prefix(n), MatchPosition::Contains) => base / (41 - n.len() as u64),
             (Pattern::Prefix(_), MatchPosition::End) => base,
-            (Pattern::Structured { prefix_nibbles, repeat_count, .. }, MatchPosition::Contains) => {
-                base / (41 - (prefix_nibbles.len() + repeat_count) as u64)
-            }
+            (
+                Pattern::Structured {
+                    prefix_nibbles,
+                    repeat_count,
+                    ..
+                },
+                MatchPosition::Contains,
+            ) => base / (41 - (prefix_nibbles.len() + repeat_count) as u64),
             _ => base,
         }
     }
@@ -340,7 +368,10 @@ mod tests {
         let mut hash = [0u8; 20];
         assert!(p.matches_raw(&hash, MatchPosition::Start));
 
-        hash = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78];
+        hash = [
+            0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc,
+            0xde, 0xf0, 0x12, 0x34, 0x56, 0x78,
+        ];
         assert!(!p.matches_raw(&hash, MatchPosition::Start));
     }
 
@@ -373,8 +404,10 @@ mod tests {
         let hash = [0x11; 20];
         assert!(p.matches_raw(&hash, MatchPosition::Start));
 
-        let hash2 = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34,
-                0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78];
+        let hash2 = [
+            0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc,
+            0xde, 0xf0, 0x12, 0x34, 0x56, 0x78,
+        ];
         assert!(!p.matches_raw(&hash2, MatchPosition::Start));
     }
 
@@ -411,10 +444,10 @@ mod tests {
         // hash[18] high=a, hash[18] low=a, hash[19] high=X
         hash[18] = 0xaa;
         hash[19] = 0x50; // nibble 38=a, 39=5... no that's wrong
-        // Let's think: end means the structured pattern occupies the last 3 nibbles
-        // nibbles 37=a, 38=a, 39=X (X=any identical, just 1 so always matches)
-        // hash[18] = byte containing nibbles 36,37 → nibble 37 = low nibble = 0x0a
-        // hash[19] = byte containing nibbles 38,39 → nibble 38 = high = 0x0a, nibble 39 = low
+                         // Let's think: end means the structured pattern occupies the last 3 nibbles
+                         // nibbles 37=a, 38=a, 39=X (X=any identical, just 1 so always matches)
+                         // hash[18] = byte containing nibbles 36,37 → nibble 37 = low nibble = 0x0a
+                         // hash[19] = byte containing nibbles 38,39 → nibble 38 = high = 0x0a, nibble 39 = low
         hash[18] = 0x0a; // nibble 36=0, 37=a
         hash[19] = 0xa0; // nibble 38=a, 39=0 → repeat char = 0
         assert!(p.matches_raw(&hash, MatchPosition::End));
@@ -431,8 +464,14 @@ mod tests {
 
     #[test]
     fn test_display_all_variants() {
-        assert_eq!(format!("{}", Pattern::parse("cafe", false).unwrap()), "prefix(\"cafe\")");
-        assert_eq!(format!("{}", Pattern::parse("repeat:3", false).unwrap()), "repeat(3)");
+        assert_eq!(
+            format!("{}", Pattern::parse("cafe", false).unwrap()),
+            "prefix(\"cafe\")"
+        );
+        assert_eq!(
+            format!("{}", Pattern::parse("repeat:3", false).unwrap()),
+            "repeat(3)"
+        );
         assert_eq!(format!("{}", Pattern::parse("xx", false).unwrap()), "pair");
         assert!(format!("{}", Pattern::parse("/^dead/", false).unwrap()).contains("regex"));
         assert!(format!("{}", Pattern::parse("aaxxx", false).unwrap()).contains("structured"));
@@ -440,17 +479,45 @@ mod tests {
 
     #[test]
     fn test_estimated_attempts_all() {
-        assert_eq!(Pattern::parse("cafe", false).unwrap().estimated_attempts(MatchPosition::Start), 65536);
-        assert_eq!(Pattern::parse("repeat:3", false).unwrap().estimated_attempts(MatchPosition::Start), 256);
-        assert_eq!(Pattern::parse("xx", false).unwrap().estimated_attempts(MatchPosition::Start), 16);
-        assert_eq!(Pattern::parse("/^dead/", false).unwrap().estimated_attempts(MatchPosition::Start), 1_000_000);
-        assert!(Pattern::parse("aaxxx", false).unwrap().estimated_attempts(MatchPosition::Start) > 0);
+        assert_eq!(
+            Pattern::parse("cafe", false)
+                .unwrap()
+                .estimated_attempts(MatchPosition::Start),
+            65536
+        );
+        assert_eq!(
+            Pattern::parse("repeat:3", false)
+                .unwrap()
+                .estimated_attempts(MatchPosition::Start),
+            256
+        );
+        assert_eq!(
+            Pattern::parse("xx", false)
+                .unwrap()
+                .estimated_attempts(MatchPosition::Start),
+            16
+        );
+        assert_eq!(
+            Pattern::parse("/^dead/", false)
+                .unwrap()
+                .estimated_attempts(MatchPosition::Start),
+            1_000_000
+        );
+        assert!(
+            Pattern::parse("aaxxx", false)
+                .unwrap()
+                .estimated_attempts(MatchPosition::Start)
+                > 0
+        );
     }
 
     #[test]
     fn test_estimated_contains_easier() {
         let p = Pattern::parse("cafe", false).unwrap();
-        assert!(p.estimated_attempts(MatchPosition::Contains) < p.estimated_attempts(MatchPosition::Start));
+        assert!(
+            p.estimated_attempts(MatchPosition::Contains)
+                < p.estimated_attempts(MatchPosition::Start)
+        );
     }
 
     #[test]
@@ -461,8 +528,14 @@ mod tests {
     #[test]
     fn test_match_position_parse() {
         assert_eq!(MatchPosition::parse("start").unwrap(), MatchPosition::Start);
-        assert_eq!(MatchPosition::parse("contains").unwrap(), MatchPosition::Contains);
-        assert_eq!(MatchPosition::parse("include").unwrap(), MatchPosition::Contains);
+        assert_eq!(
+            MatchPosition::parse("contains").unwrap(),
+            MatchPosition::Contains
+        );
+        assert_eq!(
+            MatchPosition::parse("include").unwrap(),
+            MatchPosition::Contains
+        );
         assert_eq!(MatchPosition::parse("end").unwrap(), MatchPosition::End);
         assert!(MatchPosition::parse("middle").is_err());
     }

@@ -45,8 +45,7 @@ pub fn ensure_repo() -> Result<(), String> {
 pub fn read_head_commit() -> Result<String, String> {
     // Use lossy conversion: the nonce from a previous run contains non-UTF8 bytes
     // (0x80-0xFF range), but CommitObject::parse strips x-nonce lines anyway.
-    run_git(&["cat-file", "commit", "HEAD"])
-        .map(|out| String::from_utf8_lossy(&out).into_owned())
+    run_git(&["cat-file", "commit", "HEAD"]).map(|out| String::from_utf8_lossy(&out).into_owned())
 }
 
 /// Write a raw commit object to Git's object store.

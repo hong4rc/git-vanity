@@ -43,17 +43,11 @@ impl CommitObject {
             .fold(
                 (Vec::new(), false, FoldState::Normal),
                 |(mut lines, had_sig, state), line| match state {
-                    FoldState::InSignature
-                        if line.starts_with(' ') || line.starts_with('\t') =>
-                    {
+                    FoldState::InSignature if line.starts_with(' ') || line.starts_with('\t') => {
                         (lines, had_sig, FoldState::InSignature)
                     }
-                    _ if line.starts_with("gpgsig ") => {
-                        (lines, true, FoldState::InSignature)
-                    }
-                    _ if line.starts_with("x-nonce ") => {
-                        (lines, had_sig, FoldState::Normal)
-                    }
+                    _ if line.starts_with("gpgsig ") => (lines, true, FoldState::InSignature),
+                    _ if line.starts_with("x-nonce ") => (lines, had_sig, FoldState::Normal),
                     _ => {
                         lines.push(line.to_string());
                         (lines, had_sig, FoldState::Normal)
