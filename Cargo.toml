@@ -15,10 +15,14 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-sha1 = { version = "0.10", features = ["asm"] }
+sha1 = { version = "0.10", features = ["compress"] }
 num_cpus = "1.16"
 hex = "0.4"
 regex = "1"
+
+[features]
+default = ["sha1-asm"]
+sha1-asm = ["sha1/asm"]
 
 [dev-dependencies]
 tempfile = "3"

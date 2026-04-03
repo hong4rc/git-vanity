@@ -28,6 +28,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: git-vanity-x86_64-pc-windows-msvc.exe
+            no-asm: true
 
     runs-on: ${{ matrix.os }}
 
@@ -46,7 +47,12 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Build
+        if: ${{ !matrix.no-asm }}
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (no asm)
+        if: ${{ matrix.no-asm }}
+        run: cargo build --release --target ${{ matrix.target }} --no-default-features
 
       - name: Rename binary (unix)
         if: runner.os != 'Windows'
