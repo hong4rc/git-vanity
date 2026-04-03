@@ -63,8 +63,12 @@ fn should_stop(found: &AtomicBool, total: &AtomicU64, max: Option<u64>) -> bool 
 
 /// Multi-threaded brute-force coordinator.
 ///
-/// Uses a shared AtomicBool for fast cross-thread cancellation
+/// Uses IncrementalHasher (immutable, clone-based) for FP-clean iterator chains,
+/// shared AtomicBool for fast cross-thread cancellation,
 /// and AtomicU64 for lock-free attempt counting.
+///
+/// The hot loop uses `from_fn` to produce batch ranges lazily,
+/// then `find_map` to scan each batch for a match.
 pub fn search(
     commit: &CommitObject,
     pattern: &Pattern,
@@ -77,13 +81,13 @@ pub fn search(
     let found = Arc::new(AtomicBool::new(false));
     let total_attempts = Arc::new(AtomicU64::new(0));
 
-    const BATCH_SIZE: u64 = 4096;
+    const BATCH_SIZE: u64 = 16384;
 
     let pattern = pattern.clone();
     let max_attempts = config.max_attempts;
     let position = config.position;
 
-    // Spawn workers: map thread IDs → JoinHandles, collect into Vec
+    // Spawn workers: map thread IDs → JoinHandles
     let handles: Vec<_> = (0..config.threads)
         .map(|tid| {
             let found = Arc::clone(&found);
@@ -94,26 +98,35 @@ pub fn search(
             let suffix_bytes = suffix_bytes.clone();
 
             thread::spawn(move || {
-                (0u64..)
-                    .step_by(BATCH_SIZE as usize)
-                    .take_while(|_| !should_stop(&found, &total_attempts, max_attempts))
-                    .find_map(|batch_start| {
-                        let result = (batch_start..batch_start + BATCH_SIZE).find_map(|counter| {
-                            let nonce = generate_nonce(counter, tid as u16);
-                            let hash = incremental.hash_with_nonce(&nonce);
-                            pattern.matches_raw(&hash, position).then(|| {
-                                found.store(true, Ordering::Relaxed);
-                                total_attempts.fetch_add(counter - batch_start + 1, Ordering::Relaxed);
-                                (assemble_content(&prefix_bytes, &nonce, &suffix_bytes), hash)
-                            })
-                        });
+                let mut batch_start: u64 = 0;
 
-                        if result.is_none() {
-                            total_attempts.fetch_add(BATCH_SIZE, Ordering::Relaxed);
-                        }
+                // from_fn produces batch ranges lazily until stop signal
+                std::iter::from_fn(|| {
+                    if should_stop(&found, &total_attempts, max_attempts) {
+                        return None;
+                    }
+                    let range = batch_start..batch_start + BATCH_SIZE;
+                    batch_start += BATCH_SIZE;
+                    Some(range)
+                })
+                .find_map(|mut batch| {
+                    let batch_base = batch.start;
+                    let result = batch.find_map(|counter| {
+                        let nonce = generate_nonce(counter, tid as u16);
+                        let hash = incremental.hash_with_nonce(&nonce);
+                        pattern.matches_raw(&hash, position).then(|| {
+                            found.store(true, Ordering::Relaxed);
+                            total_attempts.fetch_add(counter - batch_base + 1, Ordering::Relaxed);
+                            (assemble_content(&prefix_bytes, &nonce, &suffix_bytes), hash)
+                        })
+                    });
 
-                        result
-                    })
+                    if result.is_none() {
+                        total_attempts.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                    }
+
+                    result
+                })
             })
         })
         .collect();
@@ -126,7 +139,7 @@ pub fn search(
         found_for_timeout.store(true, Ordering::Relaxed);
     });
 
-    // Collect: filter_map to find the first Some result
+    // Collect: find the first Some result
     let attempts = &total_attempts;
     let result = handles
         .into_iter()

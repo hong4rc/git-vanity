@@ -11,9 +11,12 @@ pub fn hash_git_object(object: &[u8]) -> [u8; 20] {
 
 /// Pre-computed SHA-1 state for incremental hashing.
 ///
-/// Strategy pattern: pre-compute the hash state up to the nonce position,
-/// then clone + finalize for each attempt. This avoids re-hashing the
-/// (constant) prefix on every single attempt — a major speedup.
+/// Strategy: pre-compute the hash state up to the nonce position,
+/// then clone + finalize for each attempt. Only the nonce + suffix
+/// bytes are hashed per attempt — the prefix is processed once.
+///
+/// Immutable by design: `hash_with_nonce` clones the internal state,
+/// making it safe to share across FP iterator chains without &mut.
 #[derive(Clone)]
 pub struct IncrementalHasher {
     /// SHA-1 state after hashing: "commit <len>\0<headers>\nx-nonce "
@@ -23,11 +26,6 @@ pub struct IncrementalHasher {
 }
 
 impl IncrementalHasher {
-    /// Build an incremental hasher from pre-computed commit parts.
-    ///
-    /// `prefix` = header lines ending with "x-nonce "
-    /// `suffix` = "\n\n<message>"
-    /// `nonce_len` = fixed nonce byte length
     pub fn new(prefix: &[u8], suffix: &[u8], nonce_len: usize) -> Self {
         let total_content_len = prefix.len() + nonce_len + suffix.len();
         let git_header = format!("commit {}\0", total_content_len);
@@ -59,7 +57,6 @@ mod tests {
 
     #[test]
     fn test_hash_known_value() {
-        // Empty blob for reference
         let object = b"blob 0\0";
         let hash = hash_git_object(object);
         let hex = hex::encode(hash);
@@ -72,7 +69,6 @@ mod tests {
         let nonce = [0x80u8, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89];
         let suffix = b"\n\nMsg\n";
 
-        // Full object hash
         let total_content_len = prefix.len() + nonce.len() + suffix.len();
         let git_header = format!("commit {}\0", total_content_len);
         let mut full = Vec::new();
@@ -82,10 +78,7 @@ mod tests {
         full.extend_from_slice(suffix);
         let expected = hash_git_object(&full);
 
-        // Incremental hash
         let inc = IncrementalHasher::new(prefix, suffix, nonce.len());
-        let actual = inc.hash_with_nonce(&nonce);
-
-        assert_eq!(expected, actual);
+        assert_eq!(inc.hash_with_nonce(&nonce), expected);
     }
 }

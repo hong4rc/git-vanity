@@ -184,11 +184,23 @@ impl Pattern {
                 }
             },
 
-            Pattern::Repeat(n) => (0..40)
-                .map(|i| nibble_at(hash, i))
-                .collect::<Vec<_>>()
-                .windows(*n)
-                .any(|w| w.iter().all(|&c| c == w[0])),
+            Pattern::Repeat(n) => {
+                let mut run = 1usize;
+                let mut prev = nibble_at(hash, 0);
+                for i in 1..40 {
+                    let curr = nibble_at(hash, i);
+                    if curr == prev {
+                        run += 1;
+                        if run >= *n {
+                            return true;
+                        }
+                    } else {
+                        run = 1;
+                        prev = curr;
+                    }
+                }
+                false
+            }
 
             Pattern::Structured { prefix_nibbles, repeat_count } => match position {
                 MatchPosition::Start => {
@@ -216,8 +228,24 @@ impl Pattern {
                 }
             },
 
-            // Pair and Regex always search the full hash
-            Pattern::Pair => (0..39).any(|i| nibble_at(hash, i) == nibble_at(hash, i + 1)),
+            // Pair: check adjacent nibbles without allocation
+            Pattern::Pair => {
+                // Check within-byte pairs (high == low nibble) first
+                // Then cross-byte pairs (low nibble of byte N == high nibble of byte N+1)
+                (0..20).any(|i| {
+                    let b = hash[i];
+                    let hi = (b >> 4) & 0x0F;
+                    let lo = b & 0x0F;
+                    // Within-byte pair
+                    if hi == lo { return true; }
+                    // Cross-byte pair (low of this byte == high of next)
+                    if i < 19 {
+                        let next_hi = (hash[i + 1] >> 4) & 0x0F;
+                        if lo == next_hi { return true; }
+                    }
+                    false
+                })
+            }
 
             Pattern::RegexPattern(re) => re.is_match(&hex::encode(hash)),
         }
