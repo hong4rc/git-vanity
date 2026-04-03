@@ -528,6 +528,112 @@ fn test_log_command() {
 }
 
 #[test]
+fn test_log_no_vanity_commits() {
+    let dir = setup_temp_repo();
+    // No vanity applied — commit should not be counted
+    let out = binary()
+        .args(["log"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("0/1 commits have vanity hashes"));
+    // No checkmark for plain commit
+    assert!(!stdout.contains("\u{2713}"));
+}
+
+#[test]
+fn test_log_mixed_commits() {
+    let dir = setup_temp_repo();
+    // First commit is plain (no vanity)
+    // Add a second commit with vanity
+    Command::new("git")
+        .args(["-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "--allow-empty", "-m", "second commit"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    binary()
+        .args(["cafe"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let out = binary()
+        .args(["log"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Only the vanity commit counts, not the plain one
+    assert!(stdout.contains("1/2 commits have vanity hashes"));
+}
+
+#[test]
+fn test_log_validates_hash_pattern() {
+    let dir = setup_temp_repo();
+    // Apply vanity with recognizable pattern
+    binary()
+        .args(["cafe"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    // Verify the hash in log output starts with cafe
+    let head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let hash = String::from_utf8_lossy(&head.stdout).trim().to_string();
+    assert!(hash.starts_with("cafe"));
+
+    let out = binary()
+        .args(["log"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Should have checkmark because hash AND nonce are valid
+    assert!(stdout.contains("\u{2713}"));
+    assert!(stdout.contains("1/1 commits have vanity hashes"));
+}
+
+#[test]
+fn test_log_multiple_vanity() {
+    let dir = setup_temp_repo();
+
+    binary()
+        .args(["dead"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    Command::new("git")
+        .args(["-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "--allow-empty", "-m", "second"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    binary()
+        .args(["beef"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let out = binary()
+        .args(["log"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("2/2 commits have vanity hashes"));
+}
+
+#[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();
     let out = binary()
