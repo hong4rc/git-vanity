@@ -277,31 +277,51 @@ fn run() -> Result<(), AppError> {
     Ok(())
 }
 
-/// Format hash to highlight the pattern position.
+/// Detect color support: stdout is TTY + NO_COLOR env not set.
+fn supports_color() -> bool {
+    atty::is(atty::Stream::Stdout) && std::env::var_os("NO_COLOR").is_none()
+}
+
+/// Wrap text in bold green ANSI codes if color is supported.
+fn bold_green(text: &str, color: bool) -> String {
+    if color { format!("\x1b[1;32m{}\x1b[0m", text) } else { text.to_string() }
+}
+
+/// Format hash with pattern highlighted in color.
+/// Pure function: computes (before, matched, after, prefix_dots, suffix_dots)
+/// from position, then assembles with color applied to matched portion.
 fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
-    let pat_lower = pattern.to_ascii_lowercase();
-    match position {
+    let pat = pattern.to_ascii_lowercase();
+    let color = supports_color();
+
+    // Compute the visible window: (show_start, match_start, match_end, show_end)
+    let (ss, ms, me, se) = match position {
         MatchPosition::Start => {
-            let end = std::cmp::min(12.max(pat_lower.len()), hash.len());
-            format!("{}...", &hash[..end])
+            let show = 12.max(pat.len()).min(hash.len());
+            (0, 0, pat.len().min(hash.len()), show)
         }
         MatchPosition::End => {
-            let start = hash.len().saturating_sub(12.max(pat_lower.len()));
-            format!("...{}", &hash[start..])
+            let show = 12.max(pat.len()).min(hash.len());
+            (hash.len() - show, hash.len() - pat.len(), hash.len(), hash.len())
         }
-        MatchPosition::Contains => {
-            if let Some(pos) = hash.find(&pat_lower) {
+        MatchPosition::Contains => hash.find(&pat).map_or(
+            (0, 0, 0, hash.len()),
+            |pos| {
                 let ctx = 3;
-                let start = pos.saturating_sub(ctx);
-                let end = std::cmp::min(pos + pat_lower.len() + ctx, hash.len());
-                let prefix = if start > 0 { "..." } else { "" };
-                let suffix = if end < hash.len() { "..." } else { "" };
-                format!("{}{}{}", prefix, &hash[start..end], suffix)
-            } else {
-                hash.to_string()
-            }
-        }
-    }
+                (pos.saturating_sub(ctx), pos, pos + pat.len(), (pos + pat.len() + ctx).min(hash.len()))
+            },
+        ),
+    };
+
+    // Assemble: dots + before + highlighted(matched) + after + dots
+    [
+        if ss > 0 { "..." } else { "" },
+        &hash[ss..ms],
+        &bold_green(&hash[ms..me], color),
+        &hash[me..se],
+        if se < hash.len() { "..." } else { "" },
+    ]
+    .concat()
 }
 
 fn format_number(n: u64) -> String {
