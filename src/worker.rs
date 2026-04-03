@@ -80,9 +80,11 @@ pub fn search(
 
     // Shared state — use caller's counter if provided (for progress reporting)
     let found = Arc::new(AtomicBool::new(false));
+    let has_progress = progress.is_some();
     let total_attempts = progress.unwrap_or_else(|| Arc::new(AtomicU64::new(0)));
 
-    const BATCH_SIZE: u64 = 65536;
+    // Larger batch when no progress reporting — fewer atomic ops
+    let batch_size: u64 = if has_progress { 65536 } else { 262144 };
 
     let pattern = pattern.clone();
     let max_attempts = config.max_attempts;
@@ -106,8 +108,8 @@ pub fn search(
                     if should_stop(&found, &total_attempts, max_attempts) {
                         return None;
                     }
-                    let range = batch_start..batch_start + BATCH_SIZE;
-                    batch_start += BATCH_SIZE;
+                    let range = batch_start..batch_start + batch_size;
+                    batch_start += batch_size;
                     Some(range)
                 })
                 .find_map(|mut batch| {
@@ -123,7 +125,7 @@ pub fn search(
                     });
 
                     if result.is_none() {
-                        total_attempts.fetch_add(BATCH_SIZE, Ordering::Relaxed);
+                        total_attempts.fetch_add(batch_size, Ordering::Relaxed);
                     }
 
                     result
