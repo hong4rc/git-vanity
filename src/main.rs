@@ -222,6 +222,27 @@ fn run() -> Result<(), AppError> {
     let start = Instant::now();
     let progress_counter = Arc::new(AtomicU64::new(0));
 
+    // Ctrl+C handler: print stats before exiting
+    let ctrlc_counter = Arc::clone(&progress_counter);
+    let ctrlc_start = start;
+    ctrlc::set_handler(move || {
+        let attempts = ctrlc_counter.load(Ordering::Relaxed);
+        let elapsed = ctrlc_start.elapsed().as_secs_f64();
+        eprint!("\r\x1b[K"); // clear progress bar
+        eprintln!(
+            "Interrupted: {} attempts in {:.2}s ({:.0}M hash/sec)",
+            format_number(attempts),
+            elapsed,
+            if elapsed > 0.0 {
+                attempts as f64 / elapsed / 1_000_000.0
+            } else {
+                0.0
+            }
+        );
+        std::process::exit(2);
+    })
+    .ok();
+
     let config = worker::WorkerConfig {
         threads: cli.threads,
         max_attempts: cli.max_attempts,

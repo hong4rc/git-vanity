@@ -19,6 +19,7 @@ sha1 = { version = "0.10", features = ["compress"] }
 num_cpus = "1.16"
 hex = "0.4"
 regex = "1"
+ctrlc = "3"
 
 [features]
 default = ["sha1-asm"]
