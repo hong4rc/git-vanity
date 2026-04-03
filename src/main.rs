@@ -256,6 +256,11 @@ fn run() -> Result<(), AppError> {
         );
     }
 
+    // Bell on long searches (> 2s) to notify user
+    if elapsed.as_secs_f64() > 2.0 && atty::is(atty::Stream::Stderr) {
+        eprint!("\x07"); // BEL character
+    }
+
     let hash_preview = format_hash(&result.hash_hex, &pattern_str, position);
     let stats = if elapsed.as_secs_f64() < 0.1 {
         String::new() // skip stats for instant matches
