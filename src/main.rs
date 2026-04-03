@@ -162,6 +162,13 @@ fn run() -> Result<(), AppError> {
         eprintln!("[vanity] estimated attempts: {}", pat.estimated_attempts(position));
     }
 
+    // Show estimated time (based on ~100M hash/sec throughput)
+    let est = pat.estimated_attempts(position);
+    let est_secs = est as f64 / 100_000_000.0;
+    if est_secs >= 0.5 && !cli.quiet {
+        eprintln!("Estimated time: ~{}", format_duration(est_secs));
+    }
+
     // Search with progress reporting
     let start = Instant::now();
     let progress_counter = Arc::new(AtomicU64::new(0));
@@ -322,6 +329,15 @@ fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
         if se < hash.len() { "..." } else { "" },
     ]
     .concat()
+}
+
+fn format_duration(secs: f64) -> String {
+    match secs {
+        s if s < 1.0 => format!("{:.1}s", s),
+        s if s < 60.0 => format!("{:.0}s", s),
+        s if s < 3600.0 => format!("{:.0}m {:.0}s", s / 60.0, s % 60.0),
+        s => format!("{:.0}h {:.0}m", s / 3600.0, (s % 3600.0) / 60.0),
+    }
 }
 
 fn format_number(n: u64) -> String {
