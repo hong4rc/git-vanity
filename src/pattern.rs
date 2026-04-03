@@ -546,4 +546,88 @@ mod tests {
         assert_eq!(format!("{}", MatchPosition::Contains), "contains");
         assert_eq!(format!("{}", MatchPosition::End), "end");
     }
+
+    #[test]
+    fn test_prefix_odd_length() {
+        // 3-char prefix "abc" — odd nibble count
+        let p = Pattern::parse("abc", false).unwrap();
+        let mut hash = [0u8; 20];
+        hash[0] = 0xab;
+        hash[1] = 0xc0;
+        assert!(p.matches_raw(&hash, MatchPosition::Start));
+        hash[1] = 0xd0;
+        assert!(!p.matches_raw(&hash, MatchPosition::Start));
+    }
+
+    #[test]
+    fn test_repeat_at_boundary() {
+        // Repeat crossing byte boundary: nibbles 1,2,3 = same
+        let p = Pattern::parse("repeat:3", false).unwrap();
+        let mut hash = [0u8; 20];
+        // 0xf0 0xff → nibbles: f,0,f,f → "ff" at positions 2,3
+        hash[0] = 0x0f;
+        hash[1] = 0xff;
+        assert!(p.matches_raw(&hash, MatchPosition::Start));
+    }
+
+    #[test]
+    fn test_repeat_no_match() {
+        let p = Pattern::parse("repeat:40", false).unwrap();
+        let hash = [0x12; 20]; // "1212121212..." — max run of 1
+        assert!(!p.matches_raw(&hash, MatchPosition::Start));
+    }
+
+    #[test]
+    fn test_pair_cross_byte() {
+        // Pair across byte boundary: low nibble of byte 0 == high nibble of byte 1
+        let p = Pattern::parse("xx", false).unwrap();
+        let mut hash = [0x12; 20]; // no within-byte pairs
+        hash[0] = 0x13; // nibbles: 1,3
+        hash[1] = 0x34; // nibbles: 3,4 → pair at position 1,2 (both 3)
+        assert!(p.matches_raw(&hash, MatchPosition::Start));
+    }
+
+    #[test]
+    fn test_structured_no_repeat_flag() {
+        // --no-repeat should reject structured patterns
+        assert!(Pattern::parse("aaxxx", true).is_err());
+    }
+
+    #[test]
+    fn test_estimated_structured_contains() {
+        let p = Pattern::parse("aaxxx", false).unwrap();
+        assert!(
+            p.estimated_attempts(MatchPosition::Contains)
+                < p.estimated_attempts(MatchPosition::Start)
+        );
+    }
+
+    #[test]
+    fn test_estimated_end_same_as_start() {
+        let p = Pattern::parse("cafe", false).unwrap();
+        assert_eq!(
+            p.estimated_attempts(MatchPosition::End),
+            p.estimated_attempts(MatchPosition::Start)
+        );
+    }
+
+    #[test]
+    fn test_prefix_single_char() {
+        let p = Pattern::parse("f", false).unwrap();
+        let mut hash = [0u8; 20];
+        hash[0] = 0xf0;
+        assert!(p.matches_raw(&hash, MatchPosition::Start));
+        hash[0] = 0x0f;
+        assert!(!p.matches_raw(&hash, MatchPosition::Start));
+        // End: last nibble
+        hash[19] = 0x0f;
+        assert!(p.matches_raw(&hash, MatchPosition::End));
+    }
+
+    #[test]
+    fn test_contains_no_match() {
+        let p = Pattern::parse("ffff", false).unwrap();
+        let hash = [0x12; 20]; // "121212..." — no "ffff" anywhere
+        assert!(!p.matches_raw(&hash, MatchPosition::Contains));
+    }
 }
