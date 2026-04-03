@@ -22,7 +22,10 @@ jobs:
         with:
           version: "0.6.0"
 
-      - name: Run benchmarks
+      - name: Run benchmarks (detailed)
+        run: cargo bench --bench hash_bench
+
+      - name: Run benchmarks (bencher format)
         run: cargo bench --bench hash_bench -- --output-format bencher | tee output.txt
 
       - name: Upload to Bencher
