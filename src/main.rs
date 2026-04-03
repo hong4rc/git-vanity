@@ -170,11 +170,18 @@ fn run() -> Result<(), AppError> {
         eprintln!("[vanity] estimated attempts: {}", pat.estimated_attempts(position));
     }
 
-    // Show estimated time (based on ~100M hash/sec throughput)
+    // Show estimated time and warn for hard patterns
     let est = pat.estimated_attempts(position);
     let est_secs = est as f64 / 100_000_000.0;
-    if est_secs >= 0.5 && !cli.quiet {
-        eprintln!("Estimated time: ~{}", format_duration(est_secs));
+    if !cli.quiet {
+        if est_secs >= 60.0 {
+            eprintln!(
+                "Warning: this pattern is hard (~{}). Consider a shorter pattern or -m contains.",
+                format_duration(est_secs)
+            );
+        } else if est_secs >= 0.5 {
+            eprintln!("Estimated time: ~{}", format_duration(est_secs));
+        }
     }
 
     // Search with progress reporting
