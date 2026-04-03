@@ -93,6 +93,18 @@ Apply? [Y/n] y
 
 This avoids searching twice — preview and apply in one step.
 
+### Show Vanity Info
+
+Check if HEAD has a vanity hash:
+
+```bash
+$ git vanity show
+Commit: 000000ee199f14cd13dee8803da93a8dfc8757cd
+Vanity: yes (x-nonce present)
+Prefix:  000000 (6 identical chars)
+Message: ux: bell notification on long searches (> 2s)
+```
+
 ### Options
 
 | Option | Short | Default | Description |
@@ -107,6 +119,11 @@ This avoids searching twice — preview and apply in one step.
 | `--debug` | `-d` | | Show throughput metrics |
 | `--no-repeat` | | | Disable structured pattern detection |
 | `--threads <n>` | `-j` | num cpus | Number of worker threads |
+| `--quiet` | `-q` | | Hide progress spinner |
+
+Use `git vanity show` to inspect HEAD's vanity status.
+
+A terminal bell plays when searches take longer than 2 seconds.
 
 ### Exit Codes
 

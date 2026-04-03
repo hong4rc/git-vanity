@@ -472,6 +472,42 @@ fn test_match_end_debug() {
     assert!(stderr.contains("end"));
 }
 
+// --- Show command ---
+
+#[test]
+fn test_show_with_vanity() {
+    let dir = setup_temp_repo();
+    // Apply vanity first
+    binary()
+        .args(["cafe"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let out = binary()
+        .args(["show"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Vanity: yes"));
+    assert!(stdout.contains("cafe"));
+}
+
+#[test]
+fn test_show_without_vanity() {
+    let dir = setup_temp_repo();
+    let out = binary()
+        .args(["show"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Vanity: no"));
+}
+
 #[test]
 fn test_no_pattern_no_preset_errors() {
     let dir = setup_temp_repo();

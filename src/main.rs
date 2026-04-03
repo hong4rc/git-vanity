@@ -117,6 +117,11 @@ fn run() -> Result<(), AppError> {
         return Ok(());
     }
 
+    // Show command: display HEAD's vanity info
+    if cli.pattern.as_deref() == Some("show") {
+        return show_vanity();
+    }
+
     // Resolve pattern: --preset takes priority, then positional arg
     let pattern_str = cli
         .preset
@@ -353,6 +358,63 @@ fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
         if se < hash.len() { "..." } else { "" },
     ]
     .concat()
+}
+
+/// Show vanity info for HEAD commit.
+/// Checks if HEAD has an x-nonce header and displays hash details.
+fn show_vanity() -> Result<(), AppError> {
+    git::ensure_repo().map_err(AppError::Git)?;
+
+    let hash = git::get_head_hash().map_err(AppError::Git)?;
+    let raw = git::read_head_commit().map_err(AppError::Git)?;
+    let has_nonce = raw.lines().any(|l| l.starts_with("x-nonce "));
+    let color = supports_color();
+
+    println!("Commit: {}", if color {
+        bold_green(&hash, true)
+    } else {
+        hash.clone()
+    });
+
+    if has_nonce {
+        // Find matching presets
+        let matching_presets: Vec<_> = preset::PRESETS
+            .iter()
+            .filter(|p| hash.starts_with(p.hex) || hash.ends_with(p.hex) || hash.contains(p.hex))
+            .collect();
+
+        // Find longest prefix run of repeated chars
+        let prefix_len = hash
+            .chars()
+            .zip(hash.chars().skip(1))
+            .take_while(|(a, b)| a == b)
+            .count();
+
+        println!("Vanity: yes (x-nonce present)");
+
+        if !matching_presets.is_empty() {
+            let names: Vec<_> = matching_presets.iter().map(|p| p.name).collect();
+            println!("Presets: {}", names.join(", "));
+        }
+
+        if prefix_len >= 2 {
+            println!("Prefix:  {} ({} identical chars)", &hash[..prefix_len + 1], prefix_len + 1);
+        }
+    } else {
+        println!("Vanity: no (no x-nonce header)");
+    }
+
+    // Show commit message (first line)
+    let msg = raw
+        .find("\n\n")
+        .map(|pos| &raw[pos + 2..])
+        .unwrap_or("")
+        .lines()
+        .next()
+        .unwrap_or("");
+    println!("Message: {}", msg);
+
+    Ok(())
 }
 
 fn format_duration(secs: f64) -> String {
