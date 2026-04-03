@@ -195,7 +195,14 @@ impl Pattern {
                 MatchPosition::Start => nibbles_match_at(hash, nibbles, 0),
                 MatchPosition::End => nibbles_match_at(hash, nibbles, 40 - nibbles.len()),
                 MatchPosition::Contains => {
-                    (0..=40 - nibbles.len()).any(|offset| nibbles_match_at(hash, nibbles, offset))
+                    // Two-phase optimization:
+                    // 1. Pre-filter: only check offsets where first nibble matches
+                    // 2. Early exit: .any() stops on first full match
+                    // This reduces nibbles_match_at calls from ~37 to ~2-3 per hash.
+                    let first = nibbles[0];
+                    (0..=40 - nibbles.len())
+                        .filter(|&offset| nibble_at(hash, offset) == first)
+                        .any(|offset| nibbles_match_at(hash, nibbles, offset))
                 }
             },
 
