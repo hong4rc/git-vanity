@@ -731,14 +731,17 @@ fn test_undo_no_nonce() {
 #[test]
 fn test_random_preset() {
     let dir = setup_temp_repo();
+    // Use short timeout — we only care that -r picks a preset, not that it finds a match
     let out = binary()
-        .args(["-r", "--dry-run"])
+        .args(["-r", "--dry-run", "-t", "5000"])
         .current_dir(dir.path())
         .output()
         .unwrap();
-    assert!(out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("Random preset:"));
+    // Either success (found) or timeout (exit 2) — both are valid
+    let code = out.status.code().unwrap_or(-1);
+    assert!(code == 0 || code == 2);
 }
 
 #[test]

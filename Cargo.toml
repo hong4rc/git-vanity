@@ -26,6 +26,11 @@ sha1-asm = ["sha1/asm"]
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "hash_bench"
+harness = false
 
 [profile.release]
 opt-level = 3
