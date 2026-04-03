@@ -9,6 +9,8 @@ mod worker;
 use clap::Parser;
 use pattern::MatchPosition;
 use std::process;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Generate Git commit hashes matching custom patterns (vanity hashes).
@@ -49,6 +51,10 @@ struct Cli {
     /// Show throughput metrics
     #[arg(short = 'd', long)]
     debug: bool,
+
+    /// Hide progress spinner
+    #[arg(short = 'q', long)]
+    quiet: bool,
 
     /// Disable auto-repeat pattern detection
     #[arg(long)]
@@ -156,8 +162,10 @@ fn run() -> Result<(), AppError> {
         eprintln!("[vanity] estimated attempts: {}", pat.estimated_attempts(position));
     }
 
-    // Search
+    // Search with progress reporting
     let start = Instant::now();
+    let progress_counter = Arc::new(AtomicU64::new(0));
+
     let config = worker::WorkerConfig {
         threads: cli.threads,
         max_attempts: cli.max_attempts,
@@ -165,7 +173,55 @@ fn run() -> Result<(), AppError> {
         position,
     };
 
-    let result = worker::search(&commit, &pat, &config).map_err(AppError::Timeout)?;
+    // Spinner: show live progress on TTY unless --quiet
+    let show_progress = !cli.quiet && !cli.debug && atty::is(atty::Stream::Stderr);
+    let spinner_counter = Arc::clone(&progress_counter);
+    let spinner_handle = show_progress.then(|| {
+        std::thread::spawn(move || {
+            let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+            let mut i = 0usize;
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let attempts = spinner_counter.load(Ordering::Relaxed);
+                if attempts == u64::MAX {
+                    break; // signal to stop
+                }
+                let elapsed = start.elapsed().as_secs_f64();
+                let speed = if elapsed > 0.0 {
+                    attempts as f64 / elapsed / 1_000_000.0
+                } else {
+                    0.0
+                };
+                eprint!(
+                    "\r{} Searching... {} attempts | {:.0}M hash/sec  ",
+                    frames[i % frames.len()],
+                    format_number(attempts),
+                    speed
+                );
+                i += 1;
+            }
+            eprint!("\r\x1b[K"); // clear spinner line
+        })
+    });
+
+    let result = worker::search(&commit, &pat, &config, Some(Arc::clone(&progress_counter)))
+        .map_err(|e| {
+            // Stop spinner before printing error
+            progress_counter.store(u64::MAX, Ordering::Relaxed);
+            if let Some(h) = spinner_handle.as_ref() {
+                // Wait briefly for spinner to clear
+                let _ = h.thread().unpark();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            AppError::Timeout(e)
+        })?;
+
+    // Stop spinner
+    progress_counter.store(u64::MAX, Ordering::Relaxed);
+    if let Some(h) = spinner_handle {
+        let _ = h.join();
+    }
+
     let elapsed = start.elapsed();
 
     if cli.debug {
@@ -189,7 +245,6 @@ fn run() -> Result<(), AppError> {
     if cli.dry_run {
         println!("\u{2713} Found matching hash: {} ({})", hash_preview, stats);
 
-        // If interactive TTY, offer to apply
         if atty::is(atty::Stream::Stdin) {
             eprint!("Apply? [Y/n] ");
             let mut input = String::new();
@@ -223,9 +278,6 @@ fn run() -> Result<(), AppError> {
 }
 
 /// Format hash to highlight the pattern position.
-/// - start:    `cafeb0ba1234...`
-/// - end:      `...9fde699cafe`
-/// - contains: `...17cafe995...`
 fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
     let pat_lower = pattern.to_ascii_lowercase();
     match position {
@@ -239,7 +291,7 @@ fn format_hash(hash: &str, pattern: &str, position: MatchPosition) -> String {
         }
         MatchPosition::Contains => {
             if let Some(pos) = hash.find(&pat_lower) {
-                let ctx = 3; // chars of context around the pattern
+                let ctx = 3;
                 let start = pos.saturating_sub(ctx);
                 let end = std::cmp::min(pos + pat_lower.len() + ctx, hash.len());
                 let prefix = if start > 0 { "..." } else { "" };

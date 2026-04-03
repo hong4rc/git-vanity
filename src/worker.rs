@@ -73,13 +73,14 @@ pub fn search(
     commit: &CommitObject,
     pattern: &Pattern,
     config: &WorkerConfig,
+    progress: Option<Arc<AtomicU64>>,
 ) -> Result<SearchResult, String> {
     let (prefix_bytes, suffix_bytes) = build_commit_parts(commit);
     let incremental = IncrementalHasher::new(&prefix_bytes, &suffix_bytes, nonce_len());
 
-    // Shared state
+    // Shared state — use caller's counter if provided (for progress reporting)
     let found = Arc::new(AtomicBool::new(false));
-    let total_attempts = Arc::new(AtomicU64::new(0));
+    let total_attempts = progress.unwrap_or_else(|| Arc::new(AtomicU64::new(0)));
 
     const BATCH_SIZE: u64 = 16384;
 
