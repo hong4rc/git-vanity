@@ -229,50 +229,35 @@ fn run() -> Result<(), AppError> {
         position,
     };
 
-    // Progress bar only for patterns expected to take > 0.5s (~50M attempts at 100M/s)
+    // Progress bar only for patterns expected to take > 0.5s
     let show_progress =
         !cli.quiet && !cli.debug && std::io::stderr().is_terminal() && est_secs >= 0.5;
     let spinner_counter = Arc::clone(&progress_counter);
     let est_attempts = est;
     let spinner_handle = show_progress.then(|| {
         std::thread::spawn(move || {
-            let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-            let mut i = 0usize;
-            // Wait 300ms before first display to get stable speed reading
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            loop {
-                let attempts = spinner_counter.load(Ordering::Relaxed);
-                if attempts == u64::MAX {
-                    break;
-                }
-                let elapsed = start.elapsed().as_secs_f64();
+            let frames = [
+                '\u{280B}', '\u{2819}', '\u{2839}', '\u{2838}', '\u{283C}', '\u{2834}', '\u{2826}',
+                '\u{2827}', '\u{2807}', '\u{280F}',
+            ];
 
-                // Skip rendering until we have meaningful data
-                if attempts == 0 || elapsed < 0.3 {
-                    i += 1;
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    continue;
-                }
-
-                let speed = attempts as f64 / elapsed;
-                let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(100.0);
-                let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
-                let bar_width = 20;
-                let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
-                let bar: String =
-                    "\u{2588}".repeat(filled) + &"\u{2591}".repeat(bar_width - filled);
-                eprint!(
-                    "\r{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
-                    frames[i % frames.len()],
-                    bar,
-                    pct,
-                    speed / 1_000_000.0,
-                    format_duration_short(remaining)
-                );
-                i += 1;
+            // from_fn produces ticks lazily until search signals done
+            std::iter::from_fn(|| {
                 std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            eprint!("\r\x1b[K"); // clear spinner line
+                let attempts = spinner_counter.load(Ordering::Relaxed);
+                (attempts != u64::MAX).then_some((attempts, start.elapsed().as_secs_f64()))
+            })
+            .enumerate()
+            // Only render when we have meaningful data (> 300ms, attempts > 0)
+            .filter(|(_, (attempts, elapsed))| *attempts > 0 && *elapsed > 0.3)
+            // Format and display each tick
+            .for_each(|(i, (attempts, elapsed))| {
+                let line =
+                    format_progress(frames[i % frames.len()], attempts, elapsed, est_attempts);
+                eprint!("\r{}", line);
+            });
+
+            eprint!("\r\x1b[K"); // clear line
         })
     });
 
@@ -579,6 +564,25 @@ fn vanity_log() -> Result<(), AppError> {
     Ok(())
 }
 
+/// Pure function: format progress bar from current state.
+/// No side effects — just data in, string out.
+fn format_progress(frame: char, attempts: u64, elapsed: f64, est_attempts: u64) -> String {
+    let speed = attempts as f64 / elapsed;
+    let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(100.0);
+    let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
+    let bar_width = 20;
+    let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
+    let bar: String = "\u{2588}".repeat(filled) + &"\u{2591}".repeat(bar_width - filled);
+    format!(
+        "{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
+        frame,
+        bar,
+        pct,
+        speed / 1_000_000.0,
+        format_duration_short(remaining)
+    )
+}
+
 fn format_duration_short(secs: f64) -> String {
     match secs {
         s if s < 1.0 => format!("{:.0}s", (s * 10.0).ceil() / 10.0_f64.max(1.0)),
@@ -592,8 +596,8 @@ fn format_duration(secs: f64) -> String {
     match secs {
         s if s < 1.0 => format!("{:.1}s", s),
         s if s < 60.0 => format!("{:.0}s", s),
-        s if s < 3600.0 => format!("{:.0}m {:.0}s", s / 60.0, s % 60.0),
-        s => format!("{:.0}h {:.0}m", s / 3600.0, (s % 3600.0) / 60.0),
+        s if s < 3600.0 => format!("{}m {}s", s as u64 / 60, s as u64 % 60),
+        s => format!("{}h {}m", s as u64 / 3600, (s as u64 % 3600) / 60),
     }
 }
 
@@ -605,4 +609,136 @@ fn format_number(n: u64) -> String {
         .map(|chunk| std::str::from_utf8(chunk).unwrap())
         .collect::<Vec<_>>()
         .join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_progress_zero_percent() {
+        let s = format_progress('⠋', 0, 1.0, 1_000_000);
+        assert!(s.contains("0.0%"));
+        assert!(s.contains("0M/s"));
+    }
+
+    #[test]
+    fn test_format_progress_50_percent() {
+        let s = format_progress('⠙', 50_000_000, 0.5, 100_000_000);
+        assert!(s.contains("50.0%"));
+        assert!(s.contains("100M/s"));
+    }
+
+    #[test]
+    fn test_format_progress_caps_at_100() {
+        // Attempts exceed estimate — should cap at 100%
+        let s = format_progress('⠹', 200_000_000, 2.0, 100_000_000);
+        assert!(s.contains("100.0%"));
+        assert!(!s.contains("200"));
+    }
+
+    #[test]
+    fn test_format_progress_shows_eta() {
+        let s = format_progress('⠸', 50_000_000, 0.5, 1_000_000_000);
+        // 950M remaining / 100M/s = ~10s
+        assert!(s.contains("~"));
+    }
+
+    #[test]
+    fn test_format_duration_short_subsecond() {
+        assert_eq!(format_duration_short(0.5), "0s");
+    }
+
+    #[test]
+    fn test_format_duration_short_seconds() {
+        assert_eq!(format_duration_short(3.2), "4s");
+    }
+
+    #[test]
+    fn test_format_duration_short_minutes() {
+        assert_eq!(format_duration_short(90.0), "2m");
+    }
+
+    #[test]
+    fn test_format_duration_short_hours() {
+        assert_eq!(format_duration_short(7200.0), "2h");
+    }
+
+    #[test]
+    fn test_format_duration_full() {
+        assert_eq!(format_duration(0.5), "0.5s");
+        assert_eq!(format_duration(5.0), "5s");
+        assert_eq!(format_duration(90.0), "1m 30s");
+        assert_eq!(format_duration(3700.0), "1h 1m");
+    }
+
+    #[test]
+    fn test_format_number_small() {
+        assert_eq!(format_number(42), "42");
+        assert_eq!(format_number(999), "999");
+    }
+
+    #[test]
+    fn test_format_number_thousands() {
+        assert_eq!(format_number(1234), "1,234");
+        assert_eq!(format_number(1_234_567), "1,234,567");
+    }
+
+    #[test]
+    fn test_format_hash_start() {
+        let h = "cafebabe12345678901234567890abcdef123456";
+        let result = format_hash(h, "cafe", MatchPosition::Start);
+        assert!(result.contains("cafe"));
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_format_hash_end() {
+        let h = "1234567890abcdef1234567890abcdef1234cafe";
+        let result = format_hash(h, "cafe", MatchPosition::End);
+        assert!(result.contains("cafe"));
+        assert!(result.starts_with("..."));
+    }
+
+    #[test]
+    fn test_format_hash_contains() {
+        let h = "1234567890cafe567890abcdef1234567890abcd";
+        let result = format_hash(h, "cafe", MatchPosition::Contains);
+        assert!(result.contains("cafe"));
+    }
+
+    #[test]
+    fn test_is_vanity_hash_leading_zeros() {
+        assert!(is_vanity_hash("00001234567890abcdef1234567890abcdef1234"));
+        assert!(is_vanity_hash("aaaa1234567890abcdef1234567890abcdef1234"));
+        assert!(!is_vanity_hash("0123456789abcdef0123456789abcdef01234567"));
+    }
+
+    #[test]
+    fn test_is_vanity_hash_preset_match() {
+        assert!(is_vanity_hash("cafebabe12345678901234567890abcdef123456"));
+        assert!(is_vanity_hash("dead567890abcdef1234567890abcdef12345678"));
+        assert!(is_vanity_hash("1234567890abcdef1234567890abcdef1234cafe"));
+    }
+
+    #[test]
+    fn test_supports_color_respects_no_color() {
+        // NO_COLOR env var should disable color
+        std::env::set_var("NO_COLOR", "1");
+        assert!(!supports_color());
+        std::env::remove_var("NO_COLOR");
+    }
+
+    #[test]
+    fn test_bold_green_no_color() {
+        assert_eq!(bold_green("test", false), "test");
+    }
+
+    #[test]
+    fn test_bold_green_with_color() {
+        let result = bold_green("test", true);
+        assert!(result.contains("\x1b[1;32m"));
+        assert!(result.contains("\x1b[0m"));
+        assert!(result.contains("test"));
+    }
 }
