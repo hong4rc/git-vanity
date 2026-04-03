@@ -211,9 +211,10 @@ fn run() -> Result<(), AppError> {
         position,
     };
 
-    // Spinner: show live progress on TTY unless --quiet
+    // Progress bar with ETA on TTY unless --quiet
     let show_progress = !cli.quiet && !cli.debug && std::io::stderr().is_terminal();
     let spinner_counter = Arc::clone(&progress_counter);
+    let est_attempts = est;
     let spinner_handle = show_progress.then(|| {
         std::thread::spawn(move || {
             let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -226,16 +227,36 @@ fn run() -> Result<(), AppError> {
                 }
                 let elapsed = start.elapsed().as_secs_f64();
                 let speed = if elapsed > 0.0 {
-                    attempts as f64 / elapsed / 1_000_000.0
+                    attempts as f64 / elapsed
                 } else {
                     0.0
                 };
-                eprint!(
-                    "\r{} Searching... {} attempts | {:.0}M hash/sec  ",
-                    frames[i % frames.len()],
-                    format_number(attempts),
-                    speed
-                );
+
+                // Progress bar with ETA when we have an estimate
+                let progress_str = if est_attempts > 0 && speed > 0.0 {
+                    let pct = (attempts as f64 / est_attempts as f64 * 100.0).min(999.0);
+                    let remaining = (est_attempts as f64 - attempts as f64).max(0.0) / speed;
+                    let bar_width = 20;
+                    let filled = ((pct / 100.0) * bar_width as f64).min(bar_width as f64) as usize;
+                    let bar: String = "\u{2588}".repeat(filled)
+                        + &"\u{2591}".repeat(bar_width - filled);
+                    format!(
+                        "\r{} {} {:>5.1}% | {:.0}M/s | ~{}  ",
+                        frames[i % frames.len()],
+                        bar,
+                        pct,
+                        speed / 1_000_000.0,
+                        format_duration_short(remaining)
+                    )
+                } else {
+                    format!(
+                        "\r{} Searching... {} | {:.0}M/s  ",
+                        frames[i % frames.len()],
+                        format_number(attempts),
+                        speed / 1_000_000.0
+                    )
+                };
+                eprint!("{}", progress_str);
                 i += 1;
             }
             eprint!("\r\x1b[K"); // clear spinner line
@@ -501,6 +522,15 @@ fn vanity_log() -> Result<(), AppError> {
     );
 
     Ok(())
+}
+
+fn format_duration_short(secs: f64) -> String {
+    match secs {
+        s if s < 1.0 => format!("{:.0}s", (s * 10.0).ceil() / 10.0_f64.max(1.0)),
+        s if s < 60.0 => format!("{:.0}s", s.ceil()),
+        s if s < 3600.0 => format!("{:.0}m", (s / 60.0).ceil()),
+        s => format!("{:.0}h", (s / 3600.0).ceil()),
+    }
 }
 
 fn format_duration(secs: f64) -> String {
