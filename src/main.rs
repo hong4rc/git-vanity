@@ -250,15 +250,19 @@ fn run() -> Result<(), AppError> {
     }
 
     let hash_preview = format_hash(&result.hash_hex, &pattern_str, position);
-    let stats = format!(
-        "{} attempts, {:.2}s",
-        format_number(result.total_attempts),
-        elapsed.as_secs_f64()
-    );
+    let stats = if elapsed.as_secs_f64() < 0.1 {
+        String::new() // skip stats for instant matches
+    } else {
+        format!(
+            " ({} attempts, {:.2}s)",
+            format_number(result.total_attempts),
+            elapsed.as_secs_f64()
+        )
+    };
 
     // Dry-run: show result without writing
     if cli.dry_run {
-        println!("\u{2713} Found matching hash: {} ({})", hash_preview, stats);
+        println!("\u{2713} Found matching hash: {}{}", hash_preview, stats);
 
         if atty::is(atty::Stream::Stdin) {
             eprint!("Apply? [Y/n] ");
@@ -283,7 +287,7 @@ fn run() -> Result<(), AppError> {
 
     let new_preview = format_hash(&new_hash, &pattern_str, position);
     println!(
-        "\u{2713} {} \u{2192} {} ({})",
+        "\u{2713} {} \u{2192} {}{}",
         &old_hash[..12],
         new_preview,
         stats
