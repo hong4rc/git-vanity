@@ -14,8 +14,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 /// Generate Git commit hashes matching custom patterns (vanity hashes).
+///
+/// Examples:
+///   git vanity cafe                Hash starts with cafe
+///   git vanity -p coffee           Use preset hex word (c0ffee)
+///   git vanity dead -m end         Hash ends with dead
+///   git vanity beef -m contains    Hash contains beef anywhere
+///   git vanity cafe -n             Preview match, then ask to apply
+///   git vanity --list-presets      Show all preset hex words
 #[derive(Parser, Debug)]
-#[command(name = "git-vanity", version, about)]
+#[command(name = "git-vanity", version, about, after_help = "See --list-presets for curated hex words like cafe, dead, c0ffee.")]
 struct Cli {
     /// Pattern to match (hex prefix, repeat:N, xx, or /regex/)
     pattern: Option<String>,
