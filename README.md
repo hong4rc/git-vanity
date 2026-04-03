@@ -17,12 +17,28 @@ The commit message, author, and date stay identical. Only an invisible `x-nonce`
 
 ## Install
 
+**Homebrew** (macOS/Linux):
 ```bash
-cargo install --path .
+brew install hong4rc/tap/git-vanity
 ```
 
-Or build locally:
+**npm** (any platform):
+```bash
+npx git-vanity cafe
+# or install globally
+npm install -g git-vanity
+```
 
+**Cargo** (from source):
+```bash
+cargo install git-vanity
+```
+
+**GitHub Releases** (prebuilt binaries):
+
+Download from [Releases](https://github.com/hong4rc/git-vanity/releases) for macOS (Intel + ARM), Linux (x64 + arm64), and Windows.
+
+**Build locally:**
 ```bash
 cargo build --release
 # Binary at ./target/release/git-vanity
