@@ -1,5 +1,9 @@
 # git-vanity
 
+[![CI](https://github.com/hong4rc/git-vanity/actions/workflows/ci.yml/badge.svg)](https://github.com/hong4rc/git-vanity/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/git-vanity.svg)](https://crates.io/crates/git-vanity)
+[![Benchmark](https://bencher.dev/perf/git-vanity?key=true&reports_per_page=4&branches_per_page=8&testbeds_per_page=8&benchmarks_per_page=8&reports_page=1&branches_page=1&testbeds_page=1&benchmarks_page=1&report=null&branches=null&testbeds=null&benchmarks=null&measures=null&start_time=null&end_time=null&clear=false&tab=benchmarks&upper_boundary=false)](https://bencher.dev/perf/git-vanity)
+
 Make your Git commits look cool. Generate commit hashes that start with `cafe`, end with `dead`, or contain `c0ffee`.
 
 ```

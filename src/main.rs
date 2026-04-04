@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 mod commit;
 mod git;
 mod hasher;

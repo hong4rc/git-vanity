@@ -2,12 +2,16 @@
 name = "git-vanity"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
 description = "Generate Git commit hashes matching custom patterns (vanity hashes)"
 license = "BUSL-1.1"
 authors = ["hong4rc"]
 repository = "https://github.com/hong4rc/git-vanity"
-keywords = ["git", "vanity", "hash", "cli"]
+homepage = "https://github.com/hong4rc/git-vanity"
+readme = "README.md"
+keywords = ["git", "vanity", "hash", "cli", "sha1"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["bench.sh", "benches/", "Formula/", "npm/", "hooks/"]
 
 [[bin]]
 name = "git-vanity"
