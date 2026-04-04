@@ -6,15 +6,11 @@
 
 Make your Git commits look cool. Generate commit hashes that start with `cafe`, end with `dead`, or contain `c0ffee`.
 
-```
-$ git vanity cafe
-✓ a1b2c3d4e5f6 → cafeb0ba1234...
-
-$ git log --oneline -1
-cafeb0b feat: add login
-```
+![demo](demo/01-vanity.svg)
 
 Nothing visible changes — same message, author, date. Just a prettier hash.
+
+> See all 26 demos: [demo.md](demo.md)
 
 > Every commit in this repo starts with `000000`. Run `git log --oneline` to verify.
 
