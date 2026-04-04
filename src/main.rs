@@ -534,23 +534,92 @@ fn undo_vanity() -> Result<(), AppError> {
     Ok(())
 }
 
-/// Check if a hash has a recognizable vanity pattern:
-/// - 4+ leading identical chars (e.g. 000000, aaaabc)
-/// - Matches any preset (start or end)
-fn is_vanity_hash(hash: &str) -> bool {
+/// Detect vanity pattern in a hash. Returns (matched_portion, position).
+/// Checks: leading repeat (4+), preset at start, preset at end, preset contains.
+fn detect_vanity(hash: &str) -> Option<(String, MatchPosition)> {
     // Check leading repeat (4+ identical chars)
     let leading = hash
         .chars()
         .take_while(|&c| c == hash.chars().next().unwrap_or(' '))
         .count();
     if leading >= 4 {
-        return true;
+        return Some((hash[..leading].to_string(), MatchPosition::Start));
     }
 
-    // Check preset match (start or end)
-    preset::PRESETS
+    // Check preset match — prioritize start > end > contains,
+    // and longer patterns first within each position
+    let presets: Vec<_> = preset::PRESETS
         .iter()
-        .any(|p| p.hex.len() >= 4 && (hash.starts_with(p.hex) || hash.ends_with(p.hex)))
+        .filter(|p| p.hex.len() >= 4)
+        .collect();
+
+    // Start matches (longest first)
+    presets
+        .iter()
+        .filter(|p| hash.starts_with(p.hex))
+        .max_by_key(|p| p.hex.len())
+        .map(|p| (p.hex.to_string(), MatchPosition::Start))
+        // End matches
+        .or_else(|| {
+            presets
+                .iter()
+                .filter(|p| hash.ends_with(p.hex))
+                .max_by_key(|p| p.hex.len())
+                .map(|p| (p.hex.to_string(), MatchPosition::End))
+        })
+        // Contains matches
+        .or_else(|| {
+            presets
+                .iter()
+                .filter(|p| hash.contains(p.hex))
+                .max_by_key(|p| p.hex.len())
+                .map(|p| (p.hex.to_string(), MatchPosition::Contains))
+        })
+}
+
+/// Format a short hash (7 chars) with the vanity pattern highlighted.
+fn format_log_hash(hash: &str, vanity: &Option<(String, MatchPosition)>, color: bool) -> String {
+    let short = &hash[..7];
+    vanity
+        .as_ref()
+        .and_then(|(pattern, position)| {
+            match position {
+                MatchPosition::Start => {
+                    let end = pattern.len().min(7);
+                    Some(format!(
+                        "{}{}",
+                        bold_green(&short[..end], color),
+                        &short[end..]
+                    ))
+                }
+                MatchPosition::End => {
+                    // Show last 7 chars with pattern highlighted
+                    let tail = &hash[hash.len() - 7..];
+                    let pat_start = tail.find(pattern.as_str())?;
+                    Some(format!(
+                        "..{}{}{}",
+                        &tail[..pat_start],
+                        bold_green(&tail[pat_start..pat_start + pattern.len()], color),
+                        &tail[pat_start + pattern.len()..]
+                    ))
+                }
+                MatchPosition::Contains => {
+                    // Find pattern in hash, show context around it
+                    let pos = hash.find(pattern.as_str())?;
+                    let start = pos.saturating_sub(2);
+                    let end = (pos + pattern.len() + 2).min(hash.len());
+                    let ctx = &hash[start..end];
+                    let rel = pos - start;
+                    Some(format!(
+                        "..{}{}{}",
+                        &ctx[..rel],
+                        bold_green(&ctx[rel..rel + pattern.len()], color),
+                        &ctx[rel + pattern.len()..]
+                    ))
+                }
+            }
+        })
+        .unwrap_or_else(|| short.to_string())
 }
 
 /// Show vanity stats for recent commits.
@@ -561,27 +630,33 @@ fn vanity_log() -> Result<(), AppError> {
     let entries = git::log_with_nonce_info(50).map_err(AppError::Git)?;
     let color = supports_color();
 
-    let vanity_count = entries
+    // Detect vanity for each commit: (hash, has_nonce, subject) → + vanity info
+    let annotated: Vec<_> = entries
         .iter()
-        .filter(|(hash, has_nonce, _)| *has_nonce && is_vanity_hash(hash))
-        .count();
+        .map(|(hash, has_nonce, subject)| {
+            let vanity = if *has_nonce {
+                detect_vanity(hash)
+            } else {
+                None
+            };
+            (hash, has_nonce, subject, vanity)
+        })
+        .collect();
 
-    entries.iter().for_each(|(hash, has_nonce, subject)| {
-        let short = &hash[..7];
-        let valid = *has_nonce && is_vanity_hash(hash);
-        let marker = if valid { "\u{2713}" } else { " " };
-        let colored_hash = if valid && color {
-            bold_green(short, true)
-        } else {
-            short.to_string()
-        };
-        println!("{} {} {}", marker, colored_hash, subject);
-    });
+    let vanity_count = annotated.iter().filter(|(_, _, _, v)| v.is_some()).count();
+
+    annotated
+        .iter()
+        .for_each(|(hash, _has_nonce, subject, vanity)| {
+            let marker = if vanity.is_some() { "\u{2713}" } else { " " };
+            let display_hash = format_log_hash(hash, vanity, color);
+            println!("{} {} {}", marker, display_hash, subject);
+        });
 
     println!(
         "\n{}/{} commits have vanity hashes",
         vanity_count,
-        entries.len()
+        annotated.len()
     );
 
     Ok(())
@@ -731,17 +806,58 @@ mod tests {
     }
 
     #[test]
-    fn test_is_vanity_hash_leading_zeros() {
-        assert!(is_vanity_hash("00001234567890abcdef1234567890abcdef1234"));
-        assert!(is_vanity_hash("aaaa1234567890abcdef1234567890abcdef1234"));
-        assert!(!is_vanity_hash("0123456789abcdef0123456789abcdef01234567"));
+    fn test_detect_vanity_leading_zeros() {
+        let v = detect_vanity("00001234567890abcdef1234567890abcdef1234");
+        assert!(v.is_some());
+        assert_eq!(v.unwrap(), ("0000".to_string(), MatchPosition::Start));
+
+        let v = detect_vanity("aaaa1234567890abcdef1234567890abcdef1234");
+        assert!(v.is_some());
+        assert_eq!(v.unwrap(), ("aaaa".to_string(), MatchPosition::Start));
+
+        assert!(detect_vanity("0123456789abcdef0123456789abcdef01234567").is_none());
     }
 
     #[test]
-    fn test_is_vanity_hash_preset_match() {
-        assert!(is_vanity_hash("cafebabe12345678901234567890abcdef123456"));
-        assert!(is_vanity_hash("dead567890abcdef1234567890abcdef12345678"));
-        assert!(is_vanity_hash("1234567890abcdef1234567890abcdef1234cafe"));
+    fn test_detect_vanity_preset_start() {
+        let v = detect_vanity("cafebabe12345678901234567890abcdef123456");
+        assert!(v.is_some());
+        assert_eq!(v.unwrap().1, MatchPosition::Start);
+    }
+
+    #[test]
+    fn test_detect_vanity_preset_end() {
+        let v = detect_vanity("1234567890abcdef1234567890abcdef1234cafe");
+        assert!(v.is_some());
+        assert_eq!(v.unwrap().1, MatchPosition::End);
+    }
+
+    #[test]
+    fn test_detect_vanity_preset_contains() {
+        let v = detect_vanity("1234567890abcafe1234567890abcdef12345678");
+        assert!(v.is_some());
+        assert_eq!(v.unwrap().1, MatchPosition::Contains);
+    }
+
+    #[test]
+    fn test_format_log_hash_start() {
+        let vanity = Some(("0000".to_string(), MatchPosition::Start));
+        let result = format_log_hash("00001234567890abcdef1234567890abcdef1234", &vanity, false);
+        assert_eq!(result, "0000123");
+    }
+
+    #[test]
+    fn test_format_log_hash_end() {
+        let vanity = Some(("cafe".to_string(), MatchPosition::End));
+        let result = format_log_hash("1234567890abcdef1234567890abcdef1234cafe", &vanity, false);
+        assert!(result.contains("cafe"));
+        assert!(result.starts_with(".."));
+    }
+
+    #[test]
+    fn test_format_log_hash_no_vanity() {
+        let result = format_log_hash("0123456789abcdef0123456789abcdef01234567", &None, false);
+        assert_eq!(result, "0123456");
     }
 
     #[test]
